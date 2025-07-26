@@ -5,6 +5,7 @@ use actix_web::{
     HttpResponse,
     Error,
     web::{self, ServiceConfig},
+    middleware::{self, Middleware},
 };
 use async_graphql_actix_web::{
     GraphQLRequest,
@@ -18,8 +19,38 @@ use crate::agents::client::AgentClient;
 use crate::agents::orchestrator::AgentOrchestrator;
 use crate::graphql::schema::{AppSchema, build_schema};
 use crate::websocket::handlers::{InsightsWebSocket, StatusWebSocket};
+use crate::auth::{AuthGuard, AuthConfig};
+use crate::rate_limit::{RateLimiter, RateLimitMiddleware};
+use crate::security::SecurityHeadersMiddleware;
 use actix_web_actors::ws;
 use futures::StreamExt;
+use jsonwebtoken::Validation;
+
+struct AuthMiddleware;
+
+impl Middleware for AuthMiddleware {
+    async fn handle(
+        &self,
+        req: actix_web::HttpRequest,
+        next: actix_web::dev::ServiceRequest,
+    ) -> Result<actix_web::dev::ServiceResponse, actix_web::Error> {
+        let auth_header = req.headers().get("Authorization");
+        
+        if let Some(header) = auth_header {
+            if let Ok(token) = header.to_str() {
+                if let Some(token) = token.strip_prefix("Bearer ") {
+                    let auth_guard = req.app_data::<Arc<AuthGuard>>().unwrap();
+                    if let Ok(claims) = auth_guard.verify_token(token) {
+                        req.extensions_mut().insert(claims);
+                        return Ok(next.call(req).await?);
+                    }
+                }
+            }
+        }
+        
+        Err(actix_web::error::ErrorUnauthorized("Unauthorized"))
+    }
+}
 
 async fn graphql_handler(
     schema: web::Data,
@@ -78,9 +109,23 @@ async fn main() -> std::io::Result<()> {
     });
 
     // Start HTTP server
+    let auth_config = AuthConfig {
+        secret_key: std::env::var("JWT_SECRET").unwrap_or_else(|_| "your-secret-key-change-in-production".to_string()),
+        token_expiration: std::time::Duration::from_secs(3600), // 1 hour
+    };
+    let auth_guard = Arc::new(AuthGuard::new(auth_config));
+    
+    // Initialize rate limiter
+    let rate_limiter = Arc::new(RateLimiter::new());
+    
     HttpServer::new(move || {
         App::new()
             .app_data(schema.clone())
+            .app_data(auth_guard.clone())
+            .app_data(rate_limiter.clone())
+            .wrap(AuthMiddleware)
+            .wrap(RateLimitMiddleware::new(rate_limiter.clone()))
+            .wrap(SecurityHeadersMiddleware)
             .service(web::resource("/graphql").route(web::post().to(graphql_handler)))
             .service(web::resource("/graphql").route(web::get().to(graphql_subscription)))
             .service(web::resource("/playground").route(web::get().to(playground)))

@@ -40,12 +40,33 @@ impl QueryRoot {
         Ok(records)
     }
 
+    #[graphql(guard = "AuthGuard")]
     async fn natural_language_query(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "Natural language query")] input: String,
         #[graphql(desc = "Type of agent to use (optional)")] agent_type: Option<String>,
+        #[graphql(desc = "Maximum number of results to return (optional)")] limit: Option<i32>,
+        #[graphql(desc = "Number of results to skip (optional)")] offset: Option<i32>,
     ) -> Result<(Vec<Record>, String), async_graphql::Error> {
+        // Get user claims from context
+        let claims = ctx.data::<Claims>()?;
+        
+        // Check if user has required permissions
+        if !claims.role.contains("query") {
+            return Err(async_graphql::Error::new("Unauthorized: Query permission required"));
+        }
+
+        // Validate input parameters
+        let query_input = QueryInput {
+            query: input,
+            agent_type,
+            limit,
+            offset,
+        };
+        
+        crate::validation::validate_query_input(ctx, query_input)?;
+
         let orchestrator = ctx.data_unchecked::<Arc<AgentOrchestrator>>();
         orchestrator.process_query(&input, agent_type).await
     }
