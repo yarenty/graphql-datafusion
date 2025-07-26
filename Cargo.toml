@@ -5,20 +5,29 @@ edition = "2024"
 
 [dependencies]
 async-graphql = "7"        # GraphQL server
-actix-web = "4.9"           # HTTP server
+async-graphql-codegen = "0.2"  # GraphQL code generation
+async-graphql-derive = "0.2"   # GraphQL derive macros
+async-trait = "0.1"           # Async trait support
+sqlparser = "0.7"             # SQL parsing
+regex = "1.10"               # Regular expressions
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-native-tls"] } # SQL execution
+actix-web = "4.11"      # HTTP server
 datafusion = "48.0"         # DataFusion query engine
 tokio = { version = "1", features = ["full"] } # Async runtime
 serde = { version = "1", features = ["derive"] } # Serialization
-log = "0.4"                 # Logging
-env_logger = "0.11"         # Logging implementation
+tracing = "0.1"              # Tracing
+tracing-subscriber = "0.3"  # Tracing subscriber
+tracing-appender = "0.2"    # File appender
+env_logger = "0.11"         # For compatibility with DataFusion
 reqwest = { version = "0.12", features = ["json"] } # HTTP client for agent API calls
 jsonwebtoken = "9.3"        # Authentication
 prometheus = "0.13"         # Metrics
 futures = "0.3"             # Async utilities
+wiremock = "0.6"            # Testing
+lazy_static = "1.5"         # Static variables
 
 [dev-dependencies]
 tokio-test = "0.4"
 
 [build-dependencies]
-
 
