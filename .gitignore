@@ -1,0 +1,56 @@
+/target
+
+# Rust
+Cargo.lock
+Cargo.toml.orig
+**/*.rs.bk
+**/*.rs~
+**/*.rs.swp
+**/*.rs.swo
+**/*.rs.swn
+
+# IDE - IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+*.class
+
+# IDE - VS Code
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug
+**/*.pdb
+**/*.dSYM/
+
+# Build
+**/*.o
+**/*.a
+**/*.so
+**/*.dylib
+**/*.dll
+**/*.exe
+**/*.pdb
+**/*.map
+
+# Testing
+debug/
+debug.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Local development
+.local

@@ -1,0 +1,24 @@
+[package]
+name = "graphql-datafusion"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-graphql = "7"        # GraphQL server
+actix-web = "4.9"           # HTTP server
+datafusion = "48.0"         # DataFusion query engine
+tokio = { version = "1", features = ["full"] } # Async runtime
+serde = { version = "1", features = ["derive"] } # Serialization
+log = "0.4"                 # Logging
+env_logger = "0.11"         # Logging implementation
+reqwest = { version = "0.12", features = ["json"] } # HTTP client for agent API calls
+jsonwebtoken = "9.3"        # Authentication
+prometheus = "0.13"         # Metrics
+futures = "0.3"             # Async utilities
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[build-dependencies]
+
+
