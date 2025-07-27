@@ -68,10 +68,10 @@ impl AgentOrchestrator {
                 Ok(result) => return Ok(result),
                 Err(e) => {
                     if attempt == self.retry_attempts - 1 {
-                        error!("All attempts failed for agent {}: {}", agent_name, e);
+                        error!("All attempts failed for agent {}: {:?}", agent_name, e);
                         return Err(e);
                     }
-                    warn!("Attempt {} failed for agent {}: {}. Retrying...", 
+                    warn!("Attempt {} failed for agent {}: {:?}. Retrying...", 
                         attempt + 1, agent_name, e);
                     tokio::time::sleep(self.retry_delay).await;
                 }
@@ -95,7 +95,7 @@ impl AgentOrchestrator {
         info!("Retrieved {} records", records.len());
 
         // Step 3: Generate insights
-        let insights = client.generate_insights(records.clone()).await?;
+        let insights = client.generate_insights(records.clone()).await?.to_string();
         info!("Generated insights: {}", insights);
 
         // Broadcast insights to subscribers
@@ -118,32 +118,73 @@ impl AgentOrchestrator {
         }
     }
 
-    pub async fn subscribe_to_insights(
+    pub fn subscribe_insights(
         &self,
         query: String,
     ) -> impl Stream<Item = Result<Insight, Error>> {
         let (tx, rx) = broadcast::channel(100);
         let mut channels = self.insight_channels.lock().unwrap();
         channels.insert(query.clone(), tx);
+
+        //        let mut subscribers = self.subscribers.lock().unwrap();
+        //         subscribers.insert(query.clone());
+        //
+        //         Box::pin(rx)
+
+        struct BroadcastStream<T>(broadcast::Receiver<T>);
         
-        let mut subscribers = self.subscribers.lock().unwrap();
-        subscribers.insert(query.clone());
+        impl<T> Stream for BroadcastStream<T> {
+            type Item = Result<T, Error>;
+            
+            fn poll_next(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>
+            ) -> Poll<Option<Self::Item>> {
+                let this = self.get_mut();
+                match Pin::new(&mut this.0).poll_recv(cx) {
+                    Poll::Ready(Some(Ok(value))) => Poll::Ready(Some(Ok(value))),
+                    Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Other(e.to_string())))),
+                    Poll::Ready(None) => Poll::Ready(None),
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+        }
         
-        Box::pin(rx)
+        Box::pin(BroadcastStream(rx))
     }
 
-    pub async fn subscribe_to_status(
+    pub fn subscribe_agent_status(
         &self,
         agent_type: String,
     ) -> impl Stream<Item = Result<AgentStatus, Error>> {
         let (tx, rx) = broadcast::channel(100);
         let mut channels = self.status_channels.lock().unwrap();
         channels.insert(agent_type.clone(), tx);
+
+        //        let mut subscribers = self.subscribers.lock().unwrap();
+        //         subscribers.insert(agent_type.clone());
+        //
+        //         Box::pin(rx)
+        struct BroadcastStream<T>(broadcast::Receiver<T>);
         
-        let mut subscribers = self.subscribers.lock().unwrap();
-        subscribers.insert(agent_type.clone());
+        impl<T> Stream for BroadcastStream<T> {
+            type Item = Result<T, Error>;
+            
+            fn poll_next(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>
+            ) -> Poll::Ready<Option<Self::Item>> {
+                let this = self.get_mut();
+                match Pin::new(&mut this.0).poll_recv(cx) {
+                    Poll::Ready(Some(Ok(value))) => Poll::Ready(Some(Ok(value))),
+                    Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Other(e.to_string())))),
+                    Poll::Ready(None) => Poll::Ready(None),
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+        }
         
-        Box::pin(rx)
+        Box::pin(BroadcastStream(rx))
     }
 
     pub async fn get_available_agents(&self) -> Vec<String> {
