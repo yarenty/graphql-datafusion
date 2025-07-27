@@ -1,3 +1,6 @@
+//! Rate Limiter Example
+//! This module demonstrates rate limiting implementation with window and burst limits
+
 use async_std::task;
 use futures::stream::StreamExt;
 use std::env;
@@ -6,13 +9,28 @@ use std::time::Duration;
 use tokio::sync::Semaphore;
 use tracing::{info, warn};
 
+/// Rate limiter implementation with window and burst limits
 pub struct RateLimiter {
+    /// Semaphore for rate limiting
     semaphore: Arc<Semaphore>,
+    /// Window duration for rate limiting
     window: Duration,
+    /// Maximum number of requests allowed in burst
     burst_limit: u32,
 }
 
 impl RateLimiter {
+    /// Creates a new rate limiter instance
+    /// 
+    /// # Arguments
+    /// 
+    /// * `window` - Duration of the rate limiting window
+    /// * `limit` - Maximum number of requests allowed in the window
+    /// * `burst_limit` - Maximum number of requests allowed in a burst
+    /// 
+    /// # Returns
+    /// 
+    /// * `RateLimiter` instance
     pub fn new(window: Duration, limit: u32, burst_limit: u32) -> Self {
         let semaphore = Arc::new(Semaphore::new(limit as usize));
         Self {
@@ -22,7 +40,16 @@ impl RateLimiter {
         }
     }
 
+    /// Acquires a permit for rate limiting
+    /// 
+    /// This method checks both burst and window limits before allowing the request
+    /// 
+    /// # Returns
+    /// 
+    /// * `Ok(())` - Permit acquired successfully
+    /// * `Err` - Burst or window limit exceeded
     pub async fn acquire(&self) -> Result<(), String> {
+        // Acquire semaphore permit
         let permit = self.semaphore.clone().acquire().await;
         
         // Check burst limit

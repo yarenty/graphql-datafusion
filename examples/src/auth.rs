@@ -1,25 +1,43 @@
+//! Authentication Manager Example
+//! This module demonstrates JWT-based authentication with role-based access control
+
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::env;
 use tracing::{info, error};
 
+/// JWT Claims structure containing user information and permissions
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
-    sub: String,       // Subject (user ID)
-    exp: usize,        // Expiration time
-    iat: usize,        // Issued at
-    role: String,      // User role
-    scope: Vec<String>, // User permissions
+    /// Subject (user ID)
+    sub: String,
+    /// Expiration time (Unix timestamp)
+    exp: usize,
+    /// Issued at time (Unix timestamp)
+    iat: usize,
+    /// User role (e.g., "admin", "user")
+    role: String,
+    /// User permissions (scopes)
+    scope: Vec<String>,
 }
 
+/// Authentication manager handling JWT operations and permission checks
 pub struct AuthManager {
+    /// JWT secret key for signing/verification
     secret: String,
+    /// JWT issuer claim
     issuer: String,
+    /// JWT audience claim
     audience: String,
 }
 
 impl AuthManager {
+    /// Creates a new authentication manager instance
+    /// 
+    /// # Returns
+    /// 
+    /// * `AuthManager` instance
     pub fn new() -> Self {
         let secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
         let issuer = env::var("JWT_ISSUER").unwrap_or_else(|_| "graphql-datafusion".to_string());
@@ -32,6 +50,18 @@ impl AuthManager {
         }
     }
 
+    /// Creates a new JWT token for a user
+    /// 
+    /// # Arguments
+    /// 
+    /// * `user_id` - User identifier
+    /// * `role` - User role (e.g., "admin", "user")
+    /// * `scope` - User permissions (scopes)
+    /// 
+    /// # Returns
+    /// 
+    /// * `Ok(String)` - JWT token
+    /// * `Err` - Error if token creation fails
     pub fn create_token(&self, user_id: &str, role: &str, scope: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
         let now = Utc::now();
         let expiration = now + Duration::hours(1);
@@ -54,6 +84,16 @@ impl AuthManager {
         Ok(token)
     }
 
+    /// Validates a JWT token
+    /// 
+    /// # Arguments
+    /// 
+    /// * `token` - JWT token to validate
+    /// 
+    /// # Returns
+    /// 
+    /// * `Ok(Claims)` - Validated claims
+    /// * `Err` - Error if token is invalid or expired
     pub fn validate_token(&self, token: &str) -> Result<Claims, Box<dyn std::error::Error>> {
         let validation = Validation {
             validate_nbf: false,
@@ -79,10 +119,30 @@ impl AuthManager {
         Ok(token_data.claims)
     }
 
+    /// Checks if a user has a specific permission
+    /// 
+    /// # Arguments
+    /// 
+    /// * `claims` - User claims
+    /// * `permission` - Permission to check
+    /// 
+    /// # Returns
+    /// 
+    /// * `true` - User has the permission
+    /// * `false` - User does not have the permission
     pub fn check_permission(&self, claims: &Claims, permission: &str) -> bool {
         claims.scope.contains(&permission.to_string())
     }
 
+    /// Gets the user's role from claims
+    /// 
+    /// # Arguments
+    /// 
+    /// * `claims` - User claims
+    /// 
+    /// # Returns
+    /// 
+    /// * `&str` - User role
     pub fn get_role(&self, claims: &Claims) -> &str {
         &claims.role
     }

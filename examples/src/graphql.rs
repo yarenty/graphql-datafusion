@@ -1,3 +1,7 @@
+//! GraphQL Client Example
+//! This module demonstrates how to interact with the GraphQL DataFusion API
+//! including query execution, WebSocket subscriptions, and JWT authentication.
+
 use async_graphql::Request;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -5,12 +9,17 @@ use std::env;
 use tokio::time::Duration;
 use tracing::{info, error};
 
+/// JWT Claims structure used for token validation
 #[derive(Debug, Serialize, Deserialize)]
 struct AuthClaims {
-    sub: String,       // Subject (user ID)
-    exp: usize,        // Expiration time
-    iat: usize,        // Issued at
-    role: String,      // User role
+    /// Subject (user ID)
+    sub: String,
+    /// Expiration time (Unix timestamp)
+    exp: usize,
+    /// Issued at time (Unix timestamp)
+    iat: usize,
+    /// User role (e.g., "admin", "user")
+    role: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -19,13 +28,26 @@ struct QueryResponse {
     insights: String,
 }
 
+/// GraphQL client implementation with authentication and WebSocket support
 pub struct GraphQLClient {
+    /// HTTP client for making requests
     client: Client,
+    /// Base URL for GraphQL endpoint
     base_url: String,
+    /// JWT token for authentication
     token: String,
 }
 
 impl GraphQLClient {
+    /// Creates a new GraphQL client instance
+    /// 
+    /// # Arguments
+    /// 
+    /// * `token` - JWT token for authentication
+    /// 
+    /// # Returns
+    /// 
+    /// * `GraphQLClient` instance
     pub fn new(token: String) -> Self {
         let client = Client::new();
         let base_url = env::var("GRAPHQL_URL").unwrap_or_else(|_| "http://localhost:8000/graphql".to_string());
@@ -37,10 +59,23 @@ impl GraphQLClient {
         }
     }
 
+    /// Executes a GraphQL query with authentication
+    /// 
+    /// # Arguments
+    /// 
+    /// * `query` - GraphQL query string
+    /// * `variables` - Optional variables for the query
+    /// 
+    /// # Returns
+    /// 
+    /// * `Ok(QueryResponse)` - Query results and insights
+    /// * `Err` - Error if query fails
     pub async fn execute_query(&self, query: &str, variables: Option<serde_json::Value>) -> Result<QueryResponse, Box<dyn std::error::Error>> {
+        // Create GraphQL request with variables
         let request = Request::new(query)
             .variables(variables.unwrap_or_default());
 
+        // Send authenticated request
         let response = self.client
             .post(&self.base_url)
             .header("Authorization", format!("Bearer {}", self.token))
@@ -48,20 +83,25 @@ impl GraphQLClient {
             .send()
             .await?;
 
+        // Check for HTTP errors
         if !response.status().is_success() {
             error!("GraphQL request failed: {}", response.status());
             return Err(format!("GraphQL request failed: {}", response.status()).into());
         }
 
+        // Parse JSON response
         let body = response.json::<serde_json::Value>().await?;
         
+        // Handle GraphQL errors
         if let Some(errors) = body.get("errors") {
             error!("GraphQL errors: {}", errors);
             return Err("GraphQL query failed with errors".into());
         }
 
+        // Extract data from response
         let data = body.get("data").ok_or_else(|| "No data in response".into())?;
         
+        // Extract records and insights
         let records = data.get("naturalLanguageQuery")
             .and_then(|q| q.get("records"))
             .ok_or_else(|| "No records in response".into())?;
@@ -72,6 +112,7 @@ impl GraphQLClient {
             .ok_or_else(|| "No insights in response".into())?
             .to_string();
 
+        // Return formatted response
         Ok(QueryResponse {
             records: serde_json::from_value(records.clone())?,
             insights,
