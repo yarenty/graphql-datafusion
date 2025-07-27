@@ -150,9 +150,9 @@ struct Mutation {
     // Add your GraphQL mutations here
 }
 
-pub type Schema = async_graphql::Schema<Query, Mutation, async_graphql::EmptySubscription>;
+pub type Schema = async_graphql::Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
 
-pub type AppSchema = Schema<QueryRoot, MutationRoot, SubscriptionRoot>;
+pub type AppSchema = Schema;
 
 pub struct MutationRoot;
 
