@@ -3,10 +3,18 @@ name = "graphql-datafusion"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "graphql_datafusion"
+path = "src/lib.rs"
+
+[[bin]]
+name = "graphql-datafusion"
+path = "src/server.rs"
+
 [dependencies]
 async-graphql = "7"        # GraphQL server
-async-graphql-codegen = "0.2"  # GraphQL code generation
-async-graphql-derive = "0.2"   # GraphQL derive macros
+#async-graphql-codegen = "0.2"  # GraphQL code generation
+#async-graphql-derive = "0.2"   # GraphQL derive macros
 async-trait = "0.1"           # Async trait support
 sqlparser = "0.7"             # SQL parsing
 regex = "1.10"               # Regular expressions
