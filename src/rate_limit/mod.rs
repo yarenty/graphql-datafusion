@@ -164,8 +164,12 @@ where
         if let Err(e) = result {
             return self.service.call(req).map(|res| {
                 res.map(|mut res| {
-                    res.headers_mut()
-                        .insert("X-RateLimit-Limit", format!("{}/min", crate::config::Config::default().max_batch_size).parse().unwrap());
+                    res.headers_mut().insert(
+                        "X-RateLimit-Limit",
+                        format!("{}/min", crate::config::Config::default().max_batch_size)
+                            .parse()
+                            .unwrap(),
+                    );
                     res.headers_mut()
                         .insert("X-RateLimit-Remaining", "0".parse().unwrap());
                     res.headers_mut()

@@ -1,3 +1,4 @@
+use async_graphql::Error;
 use reqwest::Client;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -5,7 +6,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::{error, warn};
-use async_graphql::Error;
 
 pub struct AgentClient {
     client: Client,
@@ -54,7 +54,7 @@ impl AgentClient {
                     if attempt == self.retry_attempts - 1 {
                         return Err(e);
                     }
-                    warn!("Attempt {} failed: {}. Retrying...", attempt + 1, e);
+                    warn!("Attempt {} failed: {:?}. Retrying...", attempt + 1, e);
                     tokio::time::sleep(self.retry_delay).await;
                 }
             }
@@ -106,7 +106,7 @@ impl AgentClient {
                     if attempt == self.retry_attempts - 1 {
                         return Err(e);
                     }
-                    warn!("Attempt {} failed: {}. Retrying...", attempt + 1, e);
+                    warn!("Attempt {} failed: {:?}. Retrying...", attempt + 1, e);
                     tokio::time::sleep(self.retry_delay).await;
                 }
             }

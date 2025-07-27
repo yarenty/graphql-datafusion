@@ -14,7 +14,7 @@ use crate::error::Error as AppError;
 use config::{Config as ConfigLib, ConfigError as ConfigLibError};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::str::FromStr;
+// use std::str::FromStr;
 
 /// Configuration for the GraphQL DataFusion server
 ///

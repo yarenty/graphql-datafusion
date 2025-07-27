@@ -1,13 +1,13 @@
-use async_trait::async_trait;
 use crate::agents::client::AgentClient;
 use crate::models::data::Record;
-use async_graphql::{Error, SubscriptionType};
-use tracing::{info, warn, error};
+use async_graphql::{Error};
+use async_trait::async_trait;
+use futures::Stream;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::broadcast;
-use futures::Stream;
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone)]
 pub struct AgentStatus {
@@ -23,7 +23,7 @@ pub struct AgentOrchestrator {
     default_agent: String,
     retry_attempts: u32,
     retry_delay: Duration,
-    
+
     // Subscription channels
     insight_channels: Arc<Mutex<HashMap<String, broadcast::Sender<Insight>>>>,
     status_channels: Arc<Mutex<HashMap<String, broadcast::Sender<AgentStatus>>>>,
@@ -56,12 +56,14 @@ impl AgentOrchestrator {
         let agent_name = agent_type
             .clone()
             .unwrap_or_else(|| self.default_agent.clone());
-        
-        let client = self.clients.get(&agent_name)
+
+        let client = self
+            .clients
+            .get(&agent_name)
             .ok_or_else(|| Error::new(format!("Agent {} not found", agent_name)))?;
 
         info!("Processing query with agent: {}", agent_name);
-        
+
         // Try with retries
         for attempt in 0..self.retry_attempts {
             match self.attempt_process_query(client, input).await {
@@ -71,8 +73,12 @@ impl AgentOrchestrator {
                         error!("All attempts failed for agent {}: {:?}", agent_name, e);
                         return Err(e);
                     }
-                    warn!("Attempt {} failed for agent {}: {:?}. Retrying...", 
-                        attempt + 1, agent_name, e);
+                    warn!(
+                        "Attempt {} failed for agent {}: {:?}. Retrying...",
+                        attempt + 1,
+                        agent_name,
+                        e
+                    );
                     tokio::time::sleep(self.retry_delay).await;
                 }
             }
@@ -118,10 +124,7 @@ impl AgentOrchestrator {
         }
     }
 
-    pub fn subscribe_insights(
-        &self,
-        query: String,
-    ) -> impl Stream<Item = Result<Insight, Error>> {
+    pub fn subscribe_insights(&self, query: String) -> impl Stream<Item = Result<Insight, Error>> {
         let (tx, rx) = broadcast::channel(100);
         let mut channels = self.insight_channels.lock().unwrap();
         channels.insert(query.clone(), tx);
@@ -132,24 +135,23 @@ impl AgentOrchestrator {
         //         Box::pin(rx)
 
         struct BroadcastStream<T>(broadcast::Receiver<T>);
-        
+
         impl<T> Stream for BroadcastStream<T> {
             type Item = Result<T, Error>;
-            
-            fn poll_next(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>
-            ) -> Poll<Option<Self::Item>> {
+
+            fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
                 let this = self.get_mut();
                 match Pin::new(&mut this.0).poll_recv(cx) {
                     Poll::Ready(Some(Ok(value))) => Poll::Ready(Some(Ok(value))),
-                    Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Other(e.to_string())))),
+                    Poll::Ready(Some(Err(e))) => {
+                        Poll::Ready(Some(Err(Error::Other(e.to_string()))))
+                    }
                     Poll::Ready(None) => Poll::Ready(None),
                     Poll::Pending => Poll::Pending,
                 }
             }
         }
-        
+
         Box::pin(BroadcastStream(rx))
     }
 
@@ -166,24 +168,26 @@ impl AgentOrchestrator {
         //
         //         Box::pin(rx)
         struct BroadcastStream<T>(broadcast::Receiver<T>);
-        
+
         impl<T> Stream for BroadcastStream<T> {
             type Item = Result<T, Error>;
-            
+
             fn poll_next(
                 self: Pin<&mut Self>,
-                cx: &mut Context<'_>
+                cx: &mut Context<'_>,
             ) -> Poll::Ready<Option<Self::Item>> {
                 let this = self.get_mut();
                 match Pin::new(&mut this.0).poll_recv(cx) {
                     Poll::Ready(Some(Ok(value))) => Poll::Ready(Some(Ok(value))),
-                    Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(Error::Other(e.to_string())))),
+                    Poll::Ready(Some(Err(e))) => {
+                        Poll::Ready(Some(Err(Error::Other(e.to_string()))))
+                    }
                     Poll::Ready(None) => Poll::Ready(None),
                     Poll::Pending => Poll::Pending,
                 }
             }
         }
-        
+
         Box::pin(BroadcastStream(rx))
     }
 
