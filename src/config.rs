@@ -10,22 +10,11 @@
 //! - Error handling
 //!
 
-use std::env;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
-
-use anyhow::Error;
-use async_graphql::Error as GraphQLError;
-use chrono::Duration as ChronoDuration;
+use crate::error::Error as AppError;
 use config::{Config as ConfigLib, ConfigError as ConfigLibError};
 use serde::{Deserialize, Serialize};
-use tokio::sync::broadcast;
-use tracing::error;
-use url::Url;
-use uuid::Uuid;
-
-use crate::error::Error as AppError;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 /// Configuration for the GraphQL DataFusion server
 ///
@@ -66,67 +55,67 @@ pub struct Config {
     pub max_ws_connections: usize,
 
     /// Query validation
-    
+
     /// Path to TLS certificate (for HTTPS)
     #[serde(default = "default_tls_cert")]
     pub tls_cert: Option<PathBuf>,
-    
+
     /// Path to TLS private key (for HTTPS)
     #[serde(default = "default_tls_key")]
     pub tls_key: Option<PathBuf>,
-    
+
     /// Enable query caching
     #[serde(default = "default_enable_caching")]
     pub enable_caching: bool,
-    
+
     /// Cache expiration time in seconds
     #[serde(default = "default_cache_expiration")]
     pub cache_expiration: u64,
-    
+
     /// Maximum cache size in bytes
     #[serde(default = "default_max_cache_size")]
     pub max_cache_size: u64,
-    
+
     /// Enable query validation
     #[serde(default = "default_enable_validation")]
     pub enable_validation: bool,
-    
+
     /// Maximum query depth
     #[serde(default = "default_max_query_depth")]
     pub max_query_depth: usize,
-    
+
     /// Maximum query complexity
     #[serde(default = "default_max_query_complexity")]
     pub max_query_complexity: usize,
-    
+
     /// Enable query batching
     #[serde(default = "default_enable_batching")]
     pub enable_batching: bool,
-    
+
     /// Maximum batch size
     #[serde(default = "default_max_batch_size")]
     pub max_batch_size: usize,
-    
+
     /// Enable query tracing
     #[serde(default = "default_enable_tracing")]
     pub enable_tracing: bool,
-    
+
     /// Enable request logging
     #[serde(default = "default_enable_request_logging")]
     pub enable_request_logging: bool,
-    
+
     /// Enable metrics collection
     #[serde(default = "default_enable_metrics")]
     pub enable_metrics: bool,
-    
+
     /// Metrics collection interval in seconds
     #[serde(default = "default_metrics_interval")]
     pub metrics_interval: u64,
-    
+
     /// Enable query optimization
     #[serde(default = "default_enable_optimization")]
     pub enable_optimization: bool,
-    
+
     /// Query optimization level (0-3)
     #[serde(default = "default_optimization_level")]
     pub optimization_level: u8,
@@ -170,7 +159,8 @@ impl Config {
     pub fn from_env() -> Result<Self, AppError> {
         let mut config = ConfigLib::builder().add_source(config::Environment::default());
 
-        config.build()
+        config
+            .build()
             .map_err(|err| AppError::Config(err))?
             .try_deserialize()
             .map_err(|err| AppError::Config(err))
@@ -179,47 +169,69 @@ impl Config {
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), AppError> {
         if self.http_port == 0 || self.http_port > 65535 {
-            return Err(AppError::Config(ConfigLibError::Message("Invalid HTTP port number".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Invalid HTTP port number".to_string(),
+            )));
         }
 
         if self.ws_port == 0 || self.ws_port > 65535 {
-            return Err(AppError::Config(ConfigLibError::Message("Invalid WebSocket port number".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Invalid WebSocket port number".to_string(),
+            )));
         }
 
         if self.jwt_expiration_secs < 60 {
-            return Err(AppError::Config(ConfigLibError::Message("JWT expiration must be at least 60 seconds".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "JWT expiration must be at least 60 seconds".to_string(),
+            )));
         }
 
         if self.max_request_size < 1024 {
-            return Err(AppError::Config(ConfigLibError::Message("Maximum request size must be at least 1KB".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Maximum request size must be at least 1KB".to_string(),
+            )));
         }
 
         if self.request_timeout < 1 {
-            return Err(AppError::Config(ConfigLibError::Message("Request timeout must be at least 1 second".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Request timeout must be at least 1 second".to_string(),
+            )));
         }
 
         if self.max_concurrent_requests < 1 {
-            return Err(AppError::Config(ConfigLibError::Message("Maximum concurrent requests must be at least 1".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Maximum concurrent requests must be at least 1".to_string(),
+            )));
         }
 
         if self.max_ws_connections < 1 {
-            return Err(AppError::Config(ConfigLibError::Message("Maximum WebSocket connections must be at least 1".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Maximum WebSocket connections must be at least 1".to_string(),
+            )));
         }
 
         if self.max_query_depth < 1 {
-            return Err(AppError::Config(ConfigLibError::Message("Maximum query depth must be at least 1".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Maximum query depth must be at least 1".to_string(),
+            )));
         }
 
         if self.max_query_complexity < 1 {
-            return Err(AppError::Config(ConfigLibError::Message("Maximum query complexity must be at least 1".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Maximum query complexity must be at least 1".to_string(),
+            )));
         }
 
         if self.max_batch_size < 1 {
-            return Err(AppError::Config(ConfigLibError::Message("Maximum batch size must be at least 1".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Maximum batch size must be at least 1".to_string(),
+            )));
         }
 
         if self.optimization_level > 3 {
-            return Err(AppError::Config(ConfigLibError::Message("Optimization level must be between 0 and 3".to_string())));
+            return Err(AppError::Config(ConfigLibError::Message(
+                "Optimization level must be between 0 and 3".to_string(),
+            )));
         }
 
         Ok(())
@@ -268,7 +280,6 @@ const fn default_max_ws_connections() -> usize {
     100
 }
 
-
 /// Default rate limiting window
 const fn default_rate_limit_window() -> u64 {
     60
@@ -278,7 +289,6 @@ const fn default_rate_limit_window() -> u64 {
 const fn default_rate_limit_max_requests() -> usize {
     100
 }
-
 
 /// Default optimization threshold
 const fn default_optimization_threshold() -> f64 {
@@ -389,8 +399,6 @@ fn default_enable_optimization() -> bool {
 fn default_optimization_level() -> u8 {
     2
 }
-
-
 
 /// Result type for configuration operations
 ///
