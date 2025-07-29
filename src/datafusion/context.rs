@@ -3,27 +3,32 @@ use datafusion::prelude::*;
 
 pub struct DataFusionContext {
     ctx: SessionContext,
-    table_name: String,
-    path: String,
+    table_names: Vec<String>,
+    data_path: String,
 }
 
 impl DataFusionContext {
-    pub async fn new(
-        path: &str,
-        table_name: &str,
-    ) -> Result<DataFusionContext, datafusion::error::DataFusionError> {
+    pub async fn new(data_path: &str) -> Result<DataFusionContext, datafusion::error::DataFusionError> {
         let ctx = SessionContext::new();
-        if path.ends_with(".csv") {
-            ctx.register_csv(table_name, path, CsvReadOptions::default())
+        let mut table_names = Vec::new();
+        
+        // Register all TPCH tables
+        let tables = [
+            "customer", "orders", "lineitem", "part", 
+            "supplier", "nation", "region", "partsupp"
+        ];
+        
+        for table in &tables {
+            let table_path = format!("{}/{}.parquet", data_path, table);
+            ctx.register_parquet(*table, &table_path, ParquetReadOptions::default())
                 .await?;
-        } else if path.ends_with(".parquet") {
-            ctx.register_parquet(table_name, path, ParquetReadOptions::default())
-                .await?;
+            table_names.push(table.to_string());
         }
+        
         Ok(Self {
             ctx,
-            table_name: table_name.to_string(),
-            path: path.to_string(),
+            table_names,
+            data_path: data_path.to_string(),
         })
     }
 
@@ -35,7 +40,25 @@ impl DataFusionContext {
         df.collect().await
     }
 
-    pub fn get_table_name(&self) -> &str {
-        &self.table_name
+    pub fn get_table_names(&self) -> &Vec<String> {
+        &self.table_names
+    }
+
+    pub fn get_data_path(&self) -> &str {
+        &self.data_path
+    }
+
+    // Helper method to get table row count
+    pub async fn get_table_count(&self, table_name: &str) -> Result<i64, datafusion::error::DataFusionError> {
+        let query = format!("SELECT COUNT(*) as count FROM {}", table_name);
+        let batches = self.execute_query(&query).await?;
+        
+        if let Some(batch) = batches.first() {
+            if let Some(count_array) = batch.column(0).as_any().downcast_ref::<datafusion::arrow::array::Int64Array>() {
+                return Ok(count_array.value(0));
+            }
+        }
+        
+        Ok(0)
     }
 }

@@ -1,8 +1,8 @@
 //! Agent orchestrator for managing multiple AI agents
 
 use crate::agents::client::AgentClient;
-use crate::agents::types::{AgentStatus, Insight};
-use crate::models::data::Record;
+use crate::agents::types::{AgentStatus, AgentConfig};
+use crate::models::data::Customer;
 use async_graphql::Error;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,123 +14,108 @@ use tracing::{error, info, warn};
 pub struct AgentOrchestrator {
     clients: HashMap<String, Arc<AgentClient>>,
     default_agent: String,
-    retry_attempts: u32,
-    retry_delay: Duration,
     agent_stats: HashMap<String, u64>,
 }
 
 impl AgentOrchestrator {
-    /// Create a new agent orchestrator
-    pub fn new(
-        clients: HashMap<String, Arc<AgentClient>>,
-        default_agent: String,
-        retry_attempts: u32,
-        retry_delay: Duration,
-    ) -> Self {
-        let mut agent_stats = HashMap::new();
-        for agent_name in clients.keys() {
-            agent_stats.insert(agent_name.clone(), 0);
-        }
-
+    pub fn new() -> Self {
+        let mut clients = HashMap::new();
+        
+        // Initialize default agent
+        let default_client = Arc::new(AgentClient::new(
+            "http://localhost:11434".to_string(),
+            "llama2".to_string(),
+        ));
+        clients.insert("default".to_string(), default_client);
+        
         Self {
             clients,
-            default_agent,
-            retry_attempts,
-            retry_delay,
-            agent_stats,
+            default_agent: "default".to_string(),
+            agent_stats: HashMap::new(),
         }
     }
 
-    /// Process a natural language query
+    pub fn with_agent(mut self, agent_type: String, client: AgentClient) -> Self {
+        self.clients.insert(agent_type.clone(), Arc::new(client));
+        self
+    }
+
     pub async fn process_query(
         &mut self,
         input: &str,
         agent_type: Option<String>,
-    ) -> Result<(Vec<Record>, String), Error> {
+    ) -> Result<(Vec<Customer>, String), Error> {
         let agent_name = agent_type.unwrap_or_else(|| self.default_agent.clone());
         
+        // Update stats
+        *self.agent_stats.entry(agent_name.clone()).or_insert(0) += 1;
+        
         let client = self.clients.get(&agent_name)
-            .ok_or_else(|| Error::new(format!("Agent {} not found", agent_name)))?;
-
-        info!("Processing query with agent: {}", agent_name);
-
-        // Try with retries
-        for attempt in 0..self.retry_attempts {
-            match self.attempt_process_query(client, input).await {
-                Ok(result) => {
-                    // Update stats
-                    if let Some(stats) = self.agent_stats.get_mut(&agent_name) {
-                        *stats += 1;
-                    }
-                    return Ok(result);
-                }
-                Err(e) => {
-                    if attempt == self.retry_attempts - 1 {
-                        error!("All attempts failed for agent {}: {:?}", agent_name, e);
-                        return Err(e);
-                    }
-                    warn!("Attempt {} failed for agent {}: {:?}. Retrying...", 
-                          attempt + 1, agent_name, e);
-                    tokio::time::sleep(self.retry_delay).await;
-                }
-            }
-        }
-
-        Err(Error::new("All retries failed"))
+            .ok_or_else(|| Error::new(format!("Agent '{}' not found", agent_name)))?;
+        
+        self.attempt_process_query(client, input).await
     }
 
-    /// Attempt to process a query with a specific agent
     async fn attempt_process_query(
         &self,
         client: &Arc<AgentClient>,
         input: &str,
-    ) -> Result<(Vec<Record>, String), Error> {
+    ) -> Result<(Vec<Customer>, String), Error> {
         // Step 1: Translate natural language to SQL
         let sql = client.translate_to_sql(input).await?;
         info!("Generated SQL: {}", sql);
-
-        // Step 2: For now, return mock data
-        // In production, this would execute SQL via DataFusion
+        
+        // Step 2: Execute SQL (in production, this would use DataFusion)
+        // For now, return mock data
         let records = vec![
-            Record { id: 1, name: "Sample 1".to_string(), value: 100.0 },
-            Record { id: 2, name: "Sample 2".to_string(), value: 200.0 },
-            Record { id: 3, name: "Sample 3".to_string(), value: 150.0 },
+            Customer {
+                c_custkey: 1,
+                c_name: "Customer#000000001".to_string(),
+                c_address: "Sample Address 1".to_string(),
+                c_nationkey: 1,
+                c_phone: "25-989-741-2988".to_string(),
+                c_acctbal: 100.0,
+                c_mktsegment: "BUILDING".to_string(),
+                c_comment: "Sample customer 1".to_string(),
+            },
+            Customer {
+                c_custkey: 2,
+                c_name: "Customer#000000002".to_string(),
+                c_address: "Sample Address 2".to_string(),
+                c_nationkey: 2,
+                c_phone: "23-768-687-3665".to_string(),
+                c_acctbal: 200.0,
+                c_mktsegment: "AUTOMOBILE".to_string(),
+                c_comment: "Sample customer 2".to_string(),
+            },
         ];
         
-        info!("Retrieved {} records", records.len());
-
-        // Step 3: Generate insights
+        // Step 3: Generate insights from the data
         let insights = client.generate_insights(records.clone()).await?;
-        info!("Generated insights: {}", insights);
-
+        
         Ok((records, insights))
     }
 
-    /// Get available agents
     pub async fn get_available_agents(&self) -> Vec<String> {
         self.clients.keys().cloned().collect()
     }
 
-    /// Get agent status
     pub async fn get_agent_status(&self, agent_type: &str) -> Option<AgentStatus> {
-        let client = self.clients.get(agent_type)?;
-        let requests_processed = self.agent_stats.get(agent_type).copied().unwrap_or(0);
-        
+        let requests = self.agent_stats.get(agent_type).copied().unwrap_or(0);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or(Duration::from_secs(0))
             .as_secs();
-
+        
         Some(AgentStatus {
             agent_type: agent_type.to_string(),
             status: "active".to_string(),
             last_update: now.to_string(),
-            model: "llama2".to_string(), // This should come from the client
-            requests_processed,
+            model: "llama2".to_string(),
+            requests_processed: requests,
         })
     }
 
-    /// Test connection to all agents
     pub async fn test_connections(&self) -> HashMap<String, bool> {
         let mut results = HashMap::new();
         
@@ -138,10 +123,14 @@ impl AgentOrchestrator {
             match client.test_connection().await {
                 Ok(success) => {
                     results.insert(agent_name.clone(), success);
-                    info!("Agent {} connection test: {}", agent_name, success);
+                    if success {
+                        info!("Agent '{}' connection test successful", agent_name);
+                    } else {
+                        warn!("Agent '{}' connection test failed", agent_name);
+                    }
                 }
                 Err(e) => {
-                    error!("Agent {} connection test failed: {:?}", agent_name, e);
+                    error!("Agent '{}' connection test error: {:?}", agent_name, e);
                     results.insert(agent_name.clone(), false);
                 }
             }
@@ -150,3 +139,4 @@ impl AgentOrchestrator {
         results
     }
 }
+

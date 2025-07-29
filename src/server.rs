@@ -37,7 +37,7 @@ pub async fn start_server(config: Config) -> Result<(), Box<dyn std::error::Erro
     info!("Starting GraphQL DataFusion server on port {}", config.http_port);
 
     // Initialize DataFusion context
-    let df_ctx = Arc::new(DataFusionContext::new(&config.data_path, &config.table_name).await
+    let df_ctx = Arc::new(DataFusionContext::new(&config.data_path).await
         .map_err(|e| format!("Failed to initialize DataFusion: {}", e))?);
 
     // Initialize agent system
@@ -48,12 +48,8 @@ pub async fn start_server(config: Config) -> Result<(), Box<dyn std::error::Erro
     ));
     clients.insert("default".to_string(), client);
 
-    let orchestrator = Arc::new(AgentOrchestrator::new(
-        clients,
-        "default".to_string(),
-        3,
-        Duration::from_secs(1),
-    ));
+    // Initialize agent orchestrator
+    let orchestrator = Arc::new(AgentOrchestrator::new());
 
     // Build GraphQL schema
     let schema = web::Data::new(build_schema(df_ctx, orchestrator));

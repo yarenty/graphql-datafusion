@@ -40,8 +40,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             http_port: 8080,
-            data_path: "data/sample.csv".to_string(),
-            table_name: "sample".to_string(),
+            data_path: "/opt/data/tpch".to_string(),
+            table_name: "customer".to_string(),
             ollama_url: "http://localhost:11434".to_string(),
             ollama_model: "llama2".to_string(),
             enable_metrics: true,
