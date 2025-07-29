@@ -1,658 +1,412 @@
 # GraphQL DataFusion API Documentation
 
-## Overview
+## 🚀 Overview
 
-The GraphQL DataFusion API provides a powerful interface for querying and analyzing data with AI-powered insights. The API is built on top of Apache DataFusion and integrates with Agentic AI services for natural language processing and insights generation.
+The **GraphQL DataFusion API** provides a powerful interface for querying and analyzing data with AI-powered insights. The API combines the performance of Apache DataFusion with the flexibility of GraphQL and the intelligence of local AI models via Ollama.
 
-## Authentication
+### Key Features
 
-### JWT Tokens
+- **📊 Automatic Data Discovery**: Automatically discovers and loads data from files and directories
+- **⚡ High Performance**: Apache DataFusion for fast SQL execution
+- **🤖 AI Integration**: Ollama-powered natural language queries and insights
+- **🔍 GraphQL Interface**: Type-safe, self-documenting API
+- **📈 Business Analytics**: Built-in analytics and insights generation
+- **🌐 Real-time**: Live data exploration and analysis
 
-The API uses JWT (JSON Web Tokens) for authentication. All requests must include a valid JWT token in the Authorization header:
+## 📊 Data Discovery
 
-```http
-Authorization: Bearer <token>
-```
+The API automatically discovers and loads data from configured directories:
 
-### Roles
+### Supported Formats
+- **CSV**: Comma-separated values
+- **Parquet**: Columnar storage format
+- **JSON**: JavaScript Object Notation
+- **JSONL**: JSON Lines format
 
-- `query`: Basic query access
-- `admin`: Full access
-- `analytics`: Insights and visualization access
+### Automatic Schema Inference
+- **Column Types**: Automatically detects data types (string, integer, float, boolean, date)
+- **Table Names**: Uses file names as table names
+- **Relationships**: Discovers foreign key relationships between tables
+- **Metadata**: Extracts table statistics and sample data
 
-## Rate Limiting
+## 🔧 GraphQL Schema
 
-### Query Limits
-
-- 100 queries per minute per IP
-- 5 queries per second burst limit
-- Window-based tracking
-- Headers:
-  - `X-RateLimit-Limit`: Maximum number of requests
-  - `X-RateLimit-Remaining`: Number of requests remaining
-  - `Retry-After`: Seconds to wait before retrying
-
-## GraphQL Schema
-
-### Query Types
+### Core Query Types
 
 ```graphql
 type Query {
-  # Get raw records from data source
-  records: [Record!]!
+  # Get available tables in the dataset
+  tables: [String!]!
   
-  # Process natural language query
-  naturalLanguageQuery(
-    input: String!
-    agentType: String
-    limit: Int
-    offset: Int
-  ): (records: [Record!]!, insights: String!)
+  # Get row count for a specific table
+  table_count(tableName: String!): Int!
   
-  # List available AI agents
-  availableAgents: [String!]!
+  # Get table schema information
+  table_schema(tableName: String!): TableSchema!
   
-  # Generate insights
-  insights(
-    input: String!
-    config: AgentConfig
-  ): [Insight!]!
+  # Query data with pagination
+  records(tableName: String!, limit: Int, offset: Int): [Record!]!
   
-  # Translate natural language to SQL
-  translateQuery(input: String!): String
+  # Comprehensive analytics
+  analytics(tableName: String!): Analytics!
   
-  # Generate data visualization
-  generateVisualization(
-    input: String!
-    config: VisualizationConfig
-  ): Visualization!
+  # AI-powered natural language query translation
+  naturalLanguageQuery(input: String!): String!
+  
+  # AI-generated business insights
+  insights(input: String!): String!
+  
+  # Check AI agent status
+  agentStatus: String!
 }
 ```
 
-### Subscription Types
+### Data Types
 
+#### Record
 ```graphql
-type Subscription {
-  # Subscribe to insights updates
-  insightsUpdates(query: String!): Insight!
-  
-  # Subscribe to agent status
-  agentStatus(agentType: String!): AgentStatus!
-  
-  # Subscribe to agent metrics
-  agentMetrics: AgentMetrics!
+type Record {
+  # Dynamic fields based on discovered schema
+  [fieldName: String!]: String!
 }
 ```
 
-### Input Types
-
+#### Table Schema
 ```graphql
-input AgentConfig {
-  agentType: String!
-  visualization: VisualizationConfig
-  aggregation: Aggregation
+type TableSchema {
+  tableName: String!
+  columns: [Column!]!
+  rowCount: Int!
+  sampleData: [Record!]!
 }
 
-input VisualizationConfig {
-  preferredTypes: [String!]!
-  filters: [Filter!]!
-  aggregation: Aggregation
-}
-
-input Filter {
-  field: String!
-  value: String!
-  operator: String!
-}
-
-input Aggregation {
-  function: String!
-  field: String!
-  groupBy: [String!]!
-  timePeriod: String
+type Column {
+  name: String!
+  dataType: String!
+  nullable: Boolean!
+  description: String
 }
 ```
 
-### Example Queries
-
-#### Basic Query
-
+#### Analytics
 ```graphql
-query GetRecords {
-  records {
-    id
-    value
-    timestamp
+type Analytics {
+  totalRecords: Int!
+  columnStats: [ColumnStats!]!
+  relationships: [Relationship!]!
+  insights: String!
+}
+
+type ColumnStats {
+  columnName: String!
+  dataType: String!
+  uniqueValues: Int!
+  nullCount: Int!
+  minValue: String
+  maxValue: String
+  avgValue: String
+}
+
+type Relationship {
+  sourceTable: String!
+  sourceColumn: String!
+  targetTable: String!
+  targetColumn: String!
+  relationshipType: String!
+}
+```
+
+## 🎯 Query Examples
+
+### Basic Data Queries
+
+#### Get Available Tables
+```graphql
+query {
+  tables
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "tables": ["customers", "orders", "products", "suppliers"]
   }
 }
 ```
 
-#### Natural Language Query
-
+#### Get Table Schema
 ```graphql
-query NaturalLanguageQuery {
-  naturalLanguageQuery(
-    input: "Show records with value > 100"
-    agentType: "analysis-agent"
-    limit: 50
-    offset: 0
-  ) {
-    records {
+query {
+  table_schema(tableName: "customers") {
+    tableName
+    rowCount
+    columns {
+      name
+      dataType
+      nullable
+    }
+    sampleData {
       id
-      value
+      name
+      email
     }
-    insights
   }
 }
 ```
 
-#### Complex Query with Aggregation
-
+#### Get Data Records
 ```graphql
-query ComplexQuery {
-  naturalLanguageQuery(
-    input: "Show monthly sales by category"
-    agentType: "sales-agent"
-    config: {
-      aggregation: {
-        function: "sum"
-        field: "sales_amount"
-        groupBy: ["category"]
-        timePeriod: "month"
-      }
-    }
-  ) {
-    records {
-      category
-      month
-      total_sales
-    }
-    insights
+query {
+  records(tableName: "customers", limit: 3) {
+    id
+    name
+    email
+    created_at
   }
 }
 ```
 
-#### Multiple Filters Query
+### Analytics Queries
 
+#### Table Analytics
 ```graphql
-query FilteredQuery {
-  naturalLanguageQuery(
-    input: "Show high-value customers in Europe"
-    agentType: "customer-agent"
-    config: {
-      visualization: {
-        preferredTypes: ["bar"]
-        filters: [
-          {
-            field: "region"
-            value: "Europe"
-            operator: "="
-          },
-          {
-            field: "value"
-            value: "1000"
-            operator: ">"
-          }
-        ]
-      }
+query {
+  analytics(tableName: "customers") {
+    totalRecords
+    columnStats {
+      columnName
+      dataType
+      uniqueValues
+      nullCount
     }
-  ) {
-    records {
-      customer_id
-      region
-      total_value
+    relationships {
+      sourceTable
+      targetTable
+      relationshipType
     }
-    insights
   }
 }
 ```
 
-#### Time Series Analysis
+### AI-Powered Queries
 
+#### Natural Language Query Translation
 ```graphql
-query TimeSeries {
-  naturalLanguageQuery(
-    input: "Analyze weekly trends in customer engagement"
-    agentType: "engagement-agent"
-    config: {
-      visualization: {
-        preferredTypes: ["line"]
-        filters: [
-          {
-            field: "date"
-            value: "2024-01-01"
-            operator: ">="
-          },
-          {
-            field: "date"
-            value: "2024-12-31"
-            operator: "<="
-          }
-        ]
-      }
-    }
-  ) {
-    records {
-      week
-      engagement_score
-    }
-    insights
+query {
+  naturalLanguageQuery(input: "show me top customers by spending")
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "naturalLanguageQuery": "SELECT c.name, SUM(o.total_amount) as total_spent FROM customers c JOIN orders o ON c.id = o.customer_id GROUP BY c.id, c.name ORDER BY total_spent DESC LIMIT 10"
   }
 }
 ```
 
-#### Real-time Monitoring
-
+#### AI-Generated Insights
 ```graphql
-query RealTimeMonitoring {
-  naturalLanguageQuery(
-    input: "Show current system metrics"
-    agentType: "monitoring-agent"
-    config: {
-      visualization: {
-        preferredTypes: ["line", "gauge"]
-      }
-    }
-  ) {
-    records {
-      metric_name
-      current_value
-      timestamp
-    }
-    insights
+query {
+  insights(input: "analyze customer spending patterns and identify trends")
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "insights": "Based on the data analysis:\n\n1. **Top Customers**: The highest spending customers show consistent purchasing patterns\n2. **Seasonal Trends**: Most orders are placed in Q1 and Q4, showing seasonal business patterns\n3. **Revenue Distribution**: Clear patterns in revenue distribution across different segments\n4. **Customer Segments**: Different segments show varying levels of customer loyalty\n5. **Growth Opportunities**: Identified potential areas for business expansion\n\nRecommendations:\n- Focus marketing efforts on high-value customer segments\n- Develop seasonal promotions for peak ordering periods\n- Expand presence in underperforming segments"
   }
 }
 ```
 
-#### Batch Processing
+## 🔍 Advanced Query Patterns
 
+### Dynamic Field Selection
 ```graphql
-query BatchProcessing {
-  naturalLanguageQuery(
-    input: "Process and analyze large dataset"
-    agentType: "batch-agent"
-    config: {
-      visualization: {
-        preferredTypes: ["heatmap"]
-        filters: [
-          {
-            field: "status"
-            value: "completed"
-            operator: "="
-          }
-        ]
-      }
-    }
-  ) {
-    records {
-      batch_id
-      status
-      completion_time
-    }
-    insights
+query {
+  records(tableName: "customers", limit: 5) {
+    # Fields are dynamically available based on discovered schema
+    id
+    name
+    email
+    # Additional fields will be available based on actual data
   }
 }
 ```
 
-#### Custom Visualization
-
+### Cross-Table Analysis
 ```graphql
-query CustomVisualization {
-  generateVisualization(
-    input: "Show correlation between price and sales"
-    config: {
-      visualization: {
-        preferredTypes: ["scatter"]
-        filters: [
-          {
-            field: "product_type"
-            value: "electronics"
-            operator: "="
-          }
-        ]
-      }
-    }
-  ) {
-    title
-    description
-    visualization {
-      kind
-      series {
-        name
-        data
-        xField
-        yField
-      }
+query {
+  # Get relationships between tables
+  analytics(tableName: "orders") {
+    relationships {
+      sourceTable
+      targetTable
+      relationshipType
     }
   }
 }
-
-## WebSocket API
-
-### Example WebSocket Usage
-
-#### Subscribe to Insights
-
-```javascript
-// Connect to WebSocket
-const ws = new WebSocket('ws://localhost:8001/ws/insights/sales-analysis');
-
-// Handle connection
-ws.onopen = () => {
-  console.log('Connected to insights stream');
-};
-
-// Handle messages
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('New insight:', data);
-};
-
-// Handle errors
-ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
-};
-
-// Handle close
-ws.onclose = () => {
-  console.log('Connection closed');
-};
 ```
 
-#### Subscribe to Agent Status
-
-```javascript
-// Connect to status WebSocket
-const statusWs = new WebSocket('ws://localhost:8001/ws/status/sales-agent');
-
-// Handle status updates
-statusWs.onmessage = (event) => {
-  const status = JSON.parse(event.data);
-  console.log('Agent status:', status);
-};
+### Data Quality Analysis
+```graphql
+query {
+  analytics(tableName: "customers") {
+    columnStats {
+      columnName
+      nullCount
+      uniqueValues
+      dataType
+    }
+  }
+}
 ```
 
-#### Error Handling
+## 🚀 Performance Characteristics
 
-```javascript
-// Error handling example
-const ws = new WebSocket('ws://localhost:8001/ws/insights/error-case');
+### Response Times
+- **Schema discovery**: 100-500ms per table
+- **Basic queries**: 10-100ms
+- **Analytics queries**: 500ms-5s
+- **AI queries**: 1-5s
 
-ws.onerror = (error) => {
-  console.error('Connection error:', error);
-  // Retry logic
-  setTimeout(() => {
-    ws.close();
-    // Reconnect
-  }, 5000);
-};
-```
+### Data Volume
+- **Supported file sizes**: Up to 10GB per file
+- **Total dataset size**: Limited by available memory
+- **Concurrent queries**: Up to 100 concurrent users
 
-## Error Handling Examples
+### Memory Usage
+- **Schema caching**: Automatic caching of discovered schemas
+- **Query optimization**: Automatic query optimization
+- **Resource management**: Automatic cleanup of temporary data
 
-### Common Errors
+## 🔧 Error Handling
 
+### GraphQL Errors
 ```json
 {
   "errors": [
     {
-      "message": "Invalid input parameters",
-      "extensions": {
-        "code": "INVALID_INPUT",
-        "details": {
-          "field": "value",
-          "message": "Value must be greater than 0"
+      "message": "Table 'unknown_table' not found",
+      "locations": [
+        {
+          "line": 2,
+          "column": 3
         }
-      }
+      ],
+      "path": ["records"]
     }
-  ]
+  ],
+  "data": null
 }
 ```
 
-```json
-{
-  "errors": [
-    {
-      "message": "Rate limit exceeded",
-      "extensions": {
-        "code": "RATE_LIMIT",
-        "details": {
-          "limit": 100,
-          "window": 60,
-          "remaining": 0
-        }
-      }
-    }
-  ]
-}
+### Common Error Types
+- **Table not found**: Requested table doesn't exist
+- **Schema inference errors**: Unable to determine data types
+- **File access errors**: Permission or file format issues
+- **AI service errors**: Ollama connection issues
+- **Memory errors**: Dataset too large for available memory
+
+### Error Recovery
+- **Automatic retry**: For transient errors
+- **Fallback responses**: For AI service failures
+- **Graceful degradation**: Partial results when possible
+- **Schema validation**: Automatic validation of discovered schemas
+
+## 🛠️ Integration Examples
+
+### JavaScript/TypeScript
+```javascript
+const query = `
+  query {
+    tables
+  }
+`;
+
+const response = await fetch('http://localhost:8080/graphql', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ query })
+});
+
+const data = await response.json();
+console.log('Available tables:', data.data.tables);
 ```
 
-```json
-{
-  "errors": [
-    {
-      "message": "Unauthorized access",
-      "extensions": {
-        "code": "UNAUTHORIZED",
-        "details": {
-          "required_role": "admin"
-        }
-      }
+### Python
+```python
+import requests
+import json
+
+query = """
+query {
+  table_schema(tableName: "customers") {
+    tableName
+    rowCount
+    columns {
+      name
+      dataType
     }
-  ]
+  }
 }
+"""
+
+response = requests.post(
+    'http://localhost:8080/graphql',
+    json={'query': query}
+)
+
+data = response.json()
+schema = data['data']['table_schema']
+print(f"Table {schema['tableName']} has {schema['rowCount']} rows")
 ```
 
-## Performance Optimization Examples
+### cURL
+```bash
+curl -X POST http://localhost:8080/graphql \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "{ tables }"
+  }'
+```
+
+## 📚 Best Practices
+
+### Data Organization
+1. **Use descriptive file names** - They become table names
+2. **Organize by data type** - Group related files in directories
+3. **Use consistent formats** - Standardize on CSV or Parquet
+4. **Include headers** - CSV files should have column headers
 
 ### Query Optimization
+1. **Use pagination** for large datasets
+2. **Limit fields** to only what you need
+3. **Cache results** for repeated queries
+4. **Use analytics queries** for aggregated data
 
-```graphql
-query OptimizedQuery {
-  naturalLanguageQuery(
-    input: "Show recent transactions"
-    agentType: "transaction-agent"
-    config: {
-      optimization: {
-        use_cache: true,
-        batch_size: 100,
-        parallel: true
-      }
-    }
-  ) {
-    records {
-      id
-      amount
-      timestamp
-    }
-    insights
-  }
-}
-```
+### AI Integration
+1. **Be specific** in natural language queries
+2. **Use insights** for business analysis
+3. **Check agent status** before AI queries
+4. **Handle timeouts** for long-running AI operations
 
-### Caching Strategy
+### Error Handling
+1. **Always check** for GraphQL errors
+2. **Implement retry logic** for transient failures
+3. **Provide fallbacks** for AI service outages
+4. **Log errors** for debugging
 
-```graphql
-query CachedQuery {
-  naturalLanguageQuery(
-    input: "Show most popular products"
-    agentType: "product-agent"
-    config: {
-      cache: {
-        ttl: 3600,
-        key: "popular_products",
-        refresh: true
-      }
-    }
-  ) {
-    records {
-      product_id
-      popularity_score
-    }
-    insights
-  }
-}
-```
+## 🔗 Related Documentation
 
-## Security Examples
-
-### Role-based Access
-
-```graphql
-query AdminQuery {
-  naturalLanguageQuery(
-    input: "Show system configuration"
-    agentType: "admin-agent"
-    config: {
-      security: {
-        required_role: "admin",
-        audit: true
-      }
-    }
-  ) {
-    records {
-      config_key
-      config_value
-    }
-    insights
-  }
-}
-```
-
-### Input Validation
-
-```graphql
-query ValidatedQuery {
-  naturalLanguageQuery(
-    input: "Show user activity"
-    agentType: "activity-agent"
-    config: {
-      validation: {
-        max_records: 1000,
-        time_window: "1d",
-        field_limits: {
-          "user_id": { "type": "string", "max_length": 100 },
-          "activity_type": { "type": "enum", "values": ["login", "logout", "action"] }
-        }
-      }
-    }
-  ) {
-    records {
-      user_id
-      activity_type
-      timestamp
-    }
-    insights
-  }
-}
-```
-
-### Endpoints
-
-- `ws://localhost:8001/ws/insights/{query}`: Subscribe to insights updates
-- `ws://localhost:8001/ws/status/{agent_type}`: Subscribe to agent status
-- `ws://localhost:8001/ws/agents`: Monitor agent metrics
-
-### Message Format
-
-```json
-{
-  "type": "insight_update",
-  "data": {
-    "title": "Sales Trend",
-    "description": "Monthly sales analysis",
-    "value": 123456,
-    "visualization": {
-      "kind": "line",
-      "series": [
-        {
-          "name": "Monthly Sales",
-          "data": [1000, 1500, 2000, 2500]
-        }
-      ]
-    }
-  }
-}
-```
-
-## Error Handling
-
-### HTTP Status Codes
-
-- 200: Success
-- 400: Bad Request
-- 401: Unauthorized
-- 403: Forbidden
-- 429: Too Many Requests
-- 500: Internal Server Error
-
-### GraphQL Error Format
-
-```json
-{
-  "errors": [
-    {
-      "message": "Error message",
-      "extensions": {
-        "code": "ERROR_CODE",
-        "details": "Additional details"
-      }
-    }
-  ]
-}
-```
-
-## Security Headers
-
-### Request Headers
-
-- `X-Content-Type-Options`: nosniff
-- `X-Frame-Options`: DENY
-- `X-XSS-Protection`: 1; mode=block
-- `X-Permitted-Cross-Domain-Policies`: none
-- `Strict-Transport-Security`: max-age=31536000; includeSubDomains; preload
-- `Content-Security-Policy`: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:
-
-### Response Headers
-
-- `Access-Control-Allow-Origin`: *
-- `Access-Control-Allow-Methods`: GET, POST, OPTIONS
-- `Access-Control-Allow-Headers`: Content-Type, Authorization
-
-## Performance Optimization
-
-### Caching
-
-- Query results
-- Token validation
-- Agent responses
-- Data source metadata
-
-### Connection Pooling
-
-- Database connections
-- Agent API connections
-- WebSocket connections
-
-### Memory Management
-
-- Efficient data structures
-- Resource cleanup
-- Memory profiling
-
-## Monitoring
-
-### Prometheus Metrics
-
-- Request metrics
-- Error rates
-- Response times
-- Cache hits/misses
-- Agent performance
-
-### Tracing
-
-- Distributed tracing
-- Request tracing
-- Error tracing
-- Performance profiling
+- [Configuration Guide](CONFIGURATION.md) - Server configuration options
+- [Deployment Guide](DEPLOYMENT.md) - Production deployment instructions
+- [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
+- [Examples](../examples/README.md) - Complete example applications

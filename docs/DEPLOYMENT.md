@@ -1,100 +1,264 @@
 # Deployment Guide
 
-## Prerequisites
+## 🚀 Overview
+
+This guide covers deploying the GraphQL DataFusion API in various environments, from local development to production clusters.
+
+## 📋 Prerequisites
 
 ### System Requirements
 
-- Rust 1.80.0 or higher
-- PostgreSQL 14+
-- Redis 6+
-- Node.js 18+ (for frontend)
-- Docker 20+
-- Docker Compose 2+
-- Kubernetes (optional)
+- **OS**: Linux (Ubuntu 20.04+, CentOS 8+), macOS 10.15+, Windows 10+
+- **CPU**: 2+ cores (4+ recommended for production)
+- **Memory**: 4GB+ RAM (8GB+ recommended for production)
+- **Storage**: 10GB+ available space
+- **Network**: Internet access for dependencies
 
-### Recommended Hardware
+### Software Dependencies
 
-- CPU: 4+ cores
-- RAM: 8GB+
-- Storage: 100GB+
-- Network: 1Gbps+
+- **Rust**: 1.80.0+ (automatically managed via rust-toolchain.toml)
+- **Docker**: 20.10+ (for containerized deployment)
+- **Ollama**: Latest version (for AI integration)
+- **Git**: For source code management
 
-## Deployment Options
+## 🔧 Local Development Setup
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd graphql-datafusion
+
+# Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+
+# Build the project
+cargo build --release
+
+# Create data directory
+mkdir -p data
+
+# Add sample data files
+# (CSV, Parquet, JSON files will be automatically discovered)
+
+# Start the server
+cargo run --release
+```
+
+### Development Environment
+
+```bash
+# Install development dependencies
+cargo install cargo-watch
+cargo install cargo-audit
+
+# Run with hot reload
+cargo watch -x run
+
+# Run tests
+cargo test
+
+# Check for security vulnerabilities
+cargo audit
+```
+
+### Environment Configuration
+
+Create a `.env` file for local development:
+
+```bash
+# .env
+DATA_PATH=./data
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama2
+SERVER_PORT=8080
+RUST_LOG=debug
+DEBUG_MODE=true
+```
+
+## 🐳 Docker Deployment
+
+### Single Container
+
+```dockerfile
+# Dockerfile
+FROM rust:1.80.0 AS builder
+
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /app/target/release/graphql-datafusion .
+
+EXPOSE 8080
+
+CMD ["./graphql-datafusion"]
+```
 
 ### Docker Compose
 
 ```yaml
-version: '3'
+# docker-compose.yml
+version: '3.8'
+
 services:
   graphql-datafusion:
     build: .
     ports:
-      - "8000:8000"          # GraphQL API
-      - "8001:8001"          # WebSocket
-      - "9090:9090"          # Prometheus
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./config:/app/config
     environment:
-      - AGENT_API_URL=https://api.x.ai/grok
-      - AGENT_API_KEY=${AGENT_API_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=postgresql://datafusion:password@db/datafusion
-      - CACHE_URL=redis://cache:6379
-      - LOG_LEVEL=info
+      - DATA_PATH=/data
+      - OLLAMA_BASE_URL=http://ollama:11434
       - RUST_LOG=info
-      - RUST_TRACING=info
     depends_on:
-      - db
-      - cache
-      - prometheus
+      - ollama
+    restart: unless-stopped
 
-  db:
-    image: postgres:14
+  ollama:
+    image: ollama/ollama:latest
     ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=datafusion
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=datafusion
+      - "11434:11434"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  cache:
-    image: redis:6
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-  prometheus:
-    image: prom/prometheus:latest
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-    volumes:
-      - grafana_data:/var/lib/grafana
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
 
 volumes:
-  postgres_data:
-  redis_data:
-  prometheus_data:
-  grafana_data:
+  ollama_data:
 ```
 
-### Kubernetes
+### Multi-Stage Production Build
+
+```dockerfile
+# Dockerfile.prod
+FROM rust:1.80.0 AS builder
+
+WORKDIR /app
+COPY . .
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build with optimizations
+RUN cargo build --release --bin graphql-datafusion
+
+FROM debian:bookworm-slim AS runtime
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -r -s /bin/false app
+
+WORKDIR /app
+COPY --from=builder /app/target/release/graphql-datafusion .
+
+# Create data directory
+RUN mkdir -p /data && chown app:app /data
+
+USER app
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["./graphql-datafusion"]
+```
+
+## ☁️ Cloud Deployment
+
+### AWS Deployment
+
+#### ECS with Fargate
 
 ```yaml
+# task-definition.json
+{
+  "family": "graphql-datafusion",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::account:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::account:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "graphql-datafusion",
+      "image": "your-registry/graphql-datafusion:latest",
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DATA_PATH",
+          "value": "/data"
+        },
+        {
+          "name": "OLLAMA_BASE_URL",
+          "value": "http://ollama:11434"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "data",
+          "containerPath": "/data",
+          "readOnly": false
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/graphql-datafusion",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "fs-12345678",
+        "rootDirectory": "/",
+        "transitEncryption": "ENABLED"
+      }
+    }
+  ]
+}
+```
+
+#### EKS Deployment
+
+```yaml
+# k8s-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: graphql-datafusion
+  labels:
+    app: graphql-datafusion
 spec:
   replicas: 3
   selector:
@@ -109,328 +273,385 @@ spec:
       - name: graphql-datafusion
         image: your-registry/graphql-datafusion:latest
         ports:
-        - containerPort: 8000
-        - containerPort: 8001
-        - containerPort: 9090
+        - containerPort: 8080
         env:
-        - name: AGENT_API_URL
-          value: "https://api.x.ai/grok"
-        - name: AGENT_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: datafusion-secrets
-              key: agent_api_key
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: datafusion-secrets
-              key: jwt_secret
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: datafusion-secrets
-              key: database_url
-        - name: CACHE_URL
-          valueFrom:
-            secretKeyRef:
-              name: datafusion-secrets
-              key: cache_url
-        - name: LOG_LEVEL
-          value: "info"
+        - name: DATA_PATH
+          value: "/data"
+        - name: OLLAMA_BASE_URL
+          value: "http://ollama-service:11434"
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
         resources:
-          limits:
-            memory: "2Gi"
-            cpu: "2"
           requests:
             memory: "1Gi"
-            cpu: "1"
-
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: data-pvc
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
-  name: graphql-datafusion
+  name: graphql-datafusion-service
 spec:
   selector:
     app: graphql-datafusion
   ports:
-  - port: 8000
-    targetPort: 8000
-    name: http
-  - port: 8001
-    targetPort: 8001
-    name: websocket
-  - port: 9090
-    targetPort: 9090
-    name: metrics
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
   type: LoadBalancer
 ```
 
-## Production Configuration
+### Google Cloud Platform
 
-### Environment Variables
+#### Cloud Run
+
+```yaml
+# cloud-run.yaml
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: graphql-datafusion
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      containers:
+      - image: gcr.io/your-project/graphql-datafusion:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DATA_PATH
+          value: "/data"
+        - name: OLLAMA_BASE_URL
+          value: "http://ollama-service:11434"
+        resources:
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+```
+
+### Azure
+
+#### Azure Container Instances
+
+```yaml
+# azure-container-instance.yaml
+apiVersion: 2021-10-01
+location: eastus
+name: graphql-datafusion
+properties:
+  containers:
+  - name: graphql-datafusion
+    properties:
+      image: your-registry.azurecr.io/graphql-datafusion:latest
+      ports:
+      - port: 8080
+      environmentVariables:
+      - name: DATA_PATH
+        value: "/data"
+      - name: OLLAMA_BASE_URL
+        value: "http://ollama-service:11434"
+      resources:
+        requests:
+          cpu: 1.0
+          memoryInGB: 2.0
+        limits:
+          cpu: 2.0
+          memoryInGB: 4.0
+      volumeMounts:
+      - name: data-volume
+        mountPath: /data
+  volumes:
+  - name: data-volume
+    properties:
+      azureFile:
+        shareName: data
+        storageAccountName: yourstorageaccount
+        storageAccountKey: your-storage-account-key
+  osType: Linux
+  restartPolicy: Always
+  ipAddress:
+    type: Public
+    ports:
+    - port: 8080
+      protocol: TCP
+```
+
+## 🔒 Production Security
+
+### SSL/TLS Configuration
+
+```nginx
+# nginx.conf
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/ssl/certs/graphql-datafusion.crt;
+    ssl_certificate_key /etc/ssl/private/graphql-datafusion.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512;
+    ssl_prefer_server_ciphers off;
+
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Security Headers
+
+```rust
+// Add security headers middleware
+use actix_web::middleware::{DefaultHeaders, Logger};
+
+pub fn configure_security(app: &mut web::ServiceConfig) {
+    app.wrap(
+        DefaultHeaders::new()
+            .add(("X-Content-Type-Options", "nosniff"))
+            .add(("X-Frame-Options", "DENY"))
+            .add(("X-XSS-Protection", "1; mode=block"))
+            .add(("Strict-Transport-Security", "max-age=31536000; includeSubDomains"))
+    );
+}
+```
+
+### Network Security
 
 ```bash
-# Security
-JWT_SECRET="production-secret-key"
-AGENT_API_KEY="production-api-key"
-
-# Performance
-CACHE_TTL=3600
-CACHE_SIZE=1000000
-
-# Monitoring
-METRICS_ENABLED=true
-METRICS_PORT=9090
-
-# Connection Pooling
-DATABASE_POOL_SIZE=10
-CACHE_POOL_SIZE=5
-AGENT_POOL_SIZE=3
-
-# Rate Limiting
-RATE_LIMIT_WINDOW=60
-RATE_LIMIT_COUNT=1000
-BURST_LIMIT=10
+# Firewall rules (UFW)
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw deny 8080/tcp  # Only allow through reverse proxy
+sudo ufw enable
 ```
 
-### Logging
+## 📊 Monitoring and Observability
+
+### Prometheus Metrics
 
 ```yaml
-version: 1
-formatters:
-  default:
-    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# prometheus.yml
+global:
+  scrape_interval: 15s
 
-handlers:
-  console:
-    class: logging.StreamHandler
-    formatter: default
-    level: info
-    stream: ext://sys.stdout
-
-  file:
-    class: logging.handlers.RotatingFileHandler
-    formatter: default
-    level: info
-    filename: logs/app.log
-    maxBytes: 10485760
-    backupCount: 10
-
-  error:
-    class: logging.handlers.RotatingFileHandler
-    formatter: default
-    level: error
-    filename: logs/error.log
-    maxBytes: 10485760
-    backupCount: 10
-
-loggers:
-  root:
-    level: info
-    handlers: [console, file, error]
-
-  datafusion:
-    level: info
-    handlers: [console, file, error]
-
-  agents:
-    level: info
-    handlers: [console, file, error]
-```
-
-### Monitoring
-
-#### Prometheus Configuration
-
-```yaml
 scrape_configs:
   - job_name: 'graphql-datafusion'
     static_configs:
-      - targets: ['localhost:9090']
-
-  - job_name: 'agent-metrics'
-    static_configs:
-      - targets: ['localhost:9091']
-
-  - job_name: 'database'
-    static_configs:
-      - targets: ['localhost:5432']
-
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['localhost:6379']
+      - targets: ['localhost:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
 ```
 
-#### Grafana Dashboard
+### Grafana Dashboard
 
-Create a dashboard with panels for:
+```json
+{
+  "dashboard": {
+    "title": "GraphQL DataFusion Metrics",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
-1. Request Metrics
-   - Request rate
-   - Error rate
-   - Response time
-   - Cache hit rate
+### Health Checks
 
-2. System Metrics
-   - CPU usage
-   - Memory usage
-   - Disk usage
-   - Network traffic
+```rust
+// Health check endpoint
+async fn health_check() -> impl Responder {
+    let mut status = HashMap::new();
+    
+    // Check data directory
+    status.insert("data_directory", std::path::Path::new("/data").exists());
+    
+    // Check Ollama connection
+    status.insert("ollama", check_ollama_connection().await);
+    
+    // Check memory usage
+    status.insert("memory_ok", get_memory_usage() < 0.9);
+    
+    HttpResponse::Ok().json(status)
+}
+```
 
-3. Database Metrics
-   - Connection pool
-   - Query rate
-   - Slow queries
-   - Cache metrics
+## 🔄 CI/CD Pipeline
 
-### Security
+### GitHub Actions
 
-1. Use HTTPS
-2. Configure proper CORS
-3. Enable rate limiting
-4. Use secure JWT secrets
-5. Enable security headers
-6. Configure proper logging
-7. Set up monitoring alerts
-8. Regular security audits
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy to Production
 
-### Backup Strategy
+on:
+  push:
+    branches: [main]
 
-1. Database
-   - Daily backups
-   - Retention: 30 days
-   - Encryption
-   - Offsite storage
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: 1.80.0
+    - run: cargo test
+    - run: cargo audit
 
-2. Cache
-   - Periodic snapshots
-   - Retention: 7 days
-   - Compression
-   - Offsite storage
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build Docker image
+      run: docker build -t graphql-datafusion .
+    - name: Push to registry
+      run: |
+        echo ${{ secrets.REGISTRY_PASSWORD }} | docker login -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+        docker tag graphql-datafusion ${{ secrets.REGISTRY_URL }}/graphql-datafusion:${{ github.sha }}
+        docker push ${{ secrets.REGISTRY_URL }}/graphql-datafusion:${{ github.sha }}
 
-3. Configuration
-   - Version control
-   - Backup
-   - Audit logs
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Deploy to production
+      run: |
+        # Deploy to your cloud platform
+        kubectl set image deployment/graphql-datafusion graphql-datafusion=${{ secrets.REGISTRY_URL }}/graphql-datafusion:${{ github.sha }}
+```
 
-### Scaling Strategy
+### GitLab CI
 
-1. Horizontal Scaling
-   - Add more replicas
-   - Load balancing
-   - Session management
+```yaml
+# .gitlab-ci.yml
+stages:
+  - test
+  - build
+  - deploy
 
-2. Vertical Scaling
-   - Increase resources
-   - Optimize queries
-   - Cache optimization
+test:
+  stage: test
+  image: rust:1.80.0
+  script:
+    - cargo test
+    - cargo audit
 
-3. Auto-scaling
-   - CPU-based
-   - Memory-based
-   - Request rate-based
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t graphql-datafusion .
+    - docker tag graphql-datafusion $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
 
-### Disaster Recovery
+deploy:
+  stage: deploy
+  script:
+    - kubectl set image deployment/graphql-datafusion graphql-datafusion=$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
+```
 
-1. Backup Plan
-   - Regular backups
-   - Offsite storage
-   - Encryption
-   - Verification
-
-2. Recovery Plan
-   - Restore procedure
-   - Data validation
-   - Testing
-   - Documentation
-
-3. Monitoring
-   - Backup status
-   - Recovery time
-   - Data integrity
-
-## Maintenance
-
-### Regular Tasks
-
-1. Log Rotation
-2. Backup Verification
-3. Performance Monitoring
-4. Security Updates
-5. Dependency Updates
-6. Configuration Review
-
-### Monitoring Alerts
-
-1. Error rate thresholds
-2. Response time warnings
-3. Resource usage alerts
-4. Backup failure notifications
-5. Security violation alerts
-
-### Performance Optimization
-
-1. Query optimization
-2. Cache tuning
-3. Connection pooling
-4. Resource allocation
-5. Load testing
-
-## Troubleshooting Guide
+## 🔧 Troubleshooting
 
 ### Common Issues
 
-1. **Connection Issues**
-   - Check network connectivity
-   - Verify ports are open
-   - Check firewall rules
-   - Verify service status
+#### High Memory Usage
+```bash
+# Check memory usage
+free -h
+ps aux --sort=-%mem | head -10
 
-2. **Performance Issues**
-   - Monitor resource usage
-   - Check query performance
-   - Review cache hits/misses
-   - Check connection pool
+# Increase memory limit
+export DATAFUSION_MEMORY_LIMIT=2147483648  # 2GB
+```
 
-3. **Security Issues**
-   - Verify JWT token validity
-   - Check rate limits
-   - Review security headers
-   - Monitor suspicious activity
+#### Slow Query Performance
+```bash
+# Enable query logging
+export RUST_LOG=debug
 
-4. **Data Issues**
-   - Verify data integrity
-   - Check database connections
-   - Review query results
-   - Check cache status
+# Check DataFusion metrics
+curl http://localhost:8080/metrics | grep datafusion
+```
 
-### Debugging Steps
+#### Ollama Connection Issues
+```bash
+# Check Ollama service
+curl http://localhost:11434/api/tags
 
-1. Check logs
-2. Monitor metrics
-3. Review configuration
-4. Test connections
-5. Check resource usage
-6. Review error messages
+# Restart Ollama
+sudo systemctl restart ollama
+```
 
-### Recovery Procedures
+### Log Analysis
 
-1. **Service Recovery**
-   - Restart service
-   - Check dependencies
-   - Verify configuration
-   - Monitor restart
+```bash
+# View logs
+journalctl -u graphql-datafusion -f
 
-2. **Data Recovery**
-   - Restore from backup
-   - Verify data
-   - Test connections
-   - Monitor performance
+# Search for errors
+grep -i error /var/log/graphql-datafusion.log
 
-3. **Security Recovery**
-   - Rotate secrets
-   - Update configuration
-   - Review access logs
-   - Monitor activity
+# Monitor real-time logs
+tail -f /var/log/graphql-datafusion.log | grep -E "(ERROR|WARN)"
+```
+
+## 🔗 Related Documentation
+
+- [API Documentation](API.md) - Complete API reference
+- [Configuration Guide](CONFIGURATION.md) - Configuration options
+- [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
