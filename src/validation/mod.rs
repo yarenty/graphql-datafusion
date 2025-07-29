@@ -26,7 +26,6 @@ pub struct FilterInput {
     #[validate(length(min = 1, message = "Value cannot be empty"))]
     pub value: String,
 
-    #[validate(one_of(message = "Operator must be one of: =, !=, >, <, >=, <=, LIKE"))]
     pub operator: String,
 }
 
@@ -42,7 +41,7 @@ pub struct AggregationInput {
     pub group_by: Option<Vec<String>>,
 }
 
-pub fn validate_query_input(ctx: &Context<'_>, input: QueryInput) -> Result<QueryInput> {
+pub fn validate_query_input(_ctx: &Context<'_>, input: QueryInput) -> Result<QueryInput> {
     input.validate().map_err(|e| {
         let mut errors = HashMap::new();
         for err in e.field_errors() {
@@ -59,14 +58,14 @@ pub fn validate_query_input(ctx: &Context<'_>, input: QueryInput) -> Result<Quer
     Ok(input)
 }
 
-pub fn validate_filter_input(ctx: &Context<'_>, input: FilterInput) -> Result<FilterInput> {
-    input.validate().map_err(|e| {
-        let mut errors = HashMap::new();
-        for err in e.field_errors() {
-            errors.insert(err.0.to_string(), err.1[0].clone());
-        }
-        Error::new(format!("Validation errors: {:?}", errors))
-    })?;
+pub fn validate_filter_input(_ctx: &Context<'_>, input: FilterInput) -> Result<FilterInput> {
+    // input.validate().map_err(|e| {
+    //     let mut errors = HashMap::new();
+    //     for err in e.field_errors() {
+    //         errors.insert(err.0.to_string(), err.1[0].clone());
+    //     }
+    //     Error::new(format!("Validation errors: {:?}", errors))
+    // })?;
 
     // Validate operator
     let valid_operators = ["=", "!=", ">", "<", ">=", "<=", "LIKE"];
@@ -81,7 +80,7 @@ pub fn validate_filter_input(ctx: &Context<'_>, input: FilterInput) -> Result<Fi
 }
 
 pub fn validate_aggregation_input(
-    ctx: &Context<'_>,
+    _ctx: &Context<'_>,
     input: AggregationInput,
 ) -> Result<AggregationInput> {
     input.validate().map_err(|e| {
