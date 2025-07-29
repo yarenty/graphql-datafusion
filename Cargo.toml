@@ -7,9 +7,6 @@ edition = "2024"
 name = "graphql_datafusion"
 path = "src/lib.rs"
 
-[[bin]]
-name = "graphql-datafusion"
-path = "src/server.rs"
 
 [dependencies]
 async-graphql = "7"        # GraphQL server # GraphQL derive macros
@@ -51,3 +48,27 @@ wiremock = "0.6" # For HTTP mock tests
 
 [build-dependencies]
 
+
+
+
+[[bin]]
+name = "graphql-datafusion"
+path = "src/server.rs"
+
+
+
+[[example]]
+name = "basic_queries"
+path = "examples/basic_queries.rs"
+
+[[example]]
+name = "ai_integration"
+path = "examples/ai_integration.rs"
+
+[[example]]
+name = "advanced_analytics"
+path = "examples/advanced_analytics.rs"
+
+[[example]]
+name = "all_examples"
+path = "examples/all_examples.rs"

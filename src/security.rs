@@ -6,8 +6,6 @@
 use actix_web::Error;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready};
 use futures_util::future::{LocalBoxFuture, Ready, ready};
-use std::future::Future;
-use std::pin::Pin;
 
 /// Security configuration
 #[derive(Debug, Clone)]
