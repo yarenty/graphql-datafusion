@@ -144,10 +144,10 @@ impl TPCHClient {
         
         let query = r#"
             query {
-                customerCount: table_count(tableName: "customer")
-                orderCount: table_count(tableName: "orders")
-                lineItemCount: table_count(tableName: "lineitem")
-                partCount: table_count(tableName: "part")
+                customerCount: tableCount(tableName: "customer")
+                orderCount: tableCount(tableName: "orders")
+                lineItemCount: tableCount(tableName: "lineitem")
+                partCount: tableCount(tableName: "part")
             }
         "#;
 

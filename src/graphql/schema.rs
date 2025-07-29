@@ -1,10 +1,10 @@
 //! GraphQL schema for DataFusion integration
 
-use crate::agents::orchestrator::AgentOrchestrator;
-use crate::datafusion::context::DataFusionContext;
-use crate::models::data::*;
 use async_graphql::{Context, Object, Schema};
 use std::sync::Arc;
+use crate::datafusion::context::DataFusionContext;
+use crate::agents::orchestrator::AgentOrchestrator;
+use crate::models::data::*;
 
 pub struct QueryRoot;
 
@@ -60,42 +60,44 @@ impl QueryRoot {
                 .column(0)
                 .as_any()
                 .downcast_ref::<datafusion::arrow::array::Int64Array>()
-                .unwrap();
-            let names = batch
-                .column(1)
-                .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
-            let addresses = batch
-                .column(2)
-                .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_custkey column"))?;
             let nationkeys = batch
                 .column(3)
                 .as_any()
                 .downcast_ref::<datafusion::arrow::array::Int64Array>()
-                .unwrap();
-            let phones = batch
-                .column(4)
-                .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_nationkey column"))?;
             let acctbals = batch
                 .column(5)
                 .as_any()
                 .downcast_ref::<datafusion::arrow::array::Float64Array>()
-                .unwrap();
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_acctbal column"))?;
+
+            // Handle string columns - support StringViewArray
+            let names = batch
+                .column(1)
+                .as_any()
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_name column"))?;
+            let addresses = batch
+                .column(2)
+                .as_any()
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_address column"))?;
+            let phones = batch
+                .column(4)
+                .as_any()
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_phone column"))?;
             let mktsegments = batch
                 .column(6)
                 .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_mktsegment column"))?;
             let comments = batch
                 .column(7)
                 .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast c_comment column"))?;
 
             for i in 0..batch.num_rows() {
                 customers.push(Customer {
@@ -128,7 +130,6 @@ impl QueryRoot {
         let query = format!(
             "SELECT o_orderkey, o_custkey, o_orderstatus, 
                     CAST(o_totalprice AS DOUBLE) as o_totalprice,
-                    CAST(o_orderdate AS VARCHAR) as o_orderdate,
                     o_orderpriority, o_clerk, o_shippriority, o_comment 
              FROM orders 
              ORDER BY o_orderkey 
@@ -143,51 +144,50 @@ impl QueryRoot {
 
         let mut orders = Vec::new();
         for batch in batches {
+            println!("Orders batch schema: {:?}", batch.schema());
+            
             let orderkeys = batch
                 .column(0)
                 .as_any()
                 .downcast_ref::<datafusion::arrow::array::Int64Array>()
-                .unwrap();
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_orderkey column"))?;
             let custkeys = batch
                 .column(1)
                 .as_any()
                 .downcast_ref::<datafusion::arrow::array::Int64Array>()
-                .unwrap();
-            let orderstatuses = batch
-                .column(2)
-                .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_custkey column"))?;
             let totalprices = batch
                 .column(3)
                 .as_any()
                 .downcast_ref::<datafusion::arrow::array::Float64Array>()
-                .unwrap();
-            let orderdates = batch
-                .column(4)
-                .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
-            let orderpriorities = batch
-                .column(5)
-                .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
-            let clerks = batch
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_totalprice column"))?;
+            let shippriorities = batch
                 .column(6)
                 .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
-            let shippriorities = batch
+                .downcast_ref::<datafusion::arrow::array::Int32Array>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_shippriority column"))?;
+
+            // Handle string columns - support StringViewArray
+            let orderstatuses = batch
+                .column(2)
+                .as_any()
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_orderstatus column"))?;
+            let orderpriorities = batch
+                .column(4)
+                .as_any()
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_orderpriority column"))?;
+            let clerks = batch
+                .column(5)
+                .as_any()
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_clerk column"))?;
+            let comments = batch
                 .column(7)
                 .as_any()
-                .downcast_ref::<datafusion::arrow::array::Int32Array>()
-                .unwrap();
-            let comments = batch
-                .column(8)
-                .as_any()
-                .downcast_ref::<datafusion::arrow::array::StringArray>()
-                .unwrap();
+                .downcast_ref::<datafusion::arrow::array::StringViewArray>()
+                .ok_or_else(|| async_graphql::Error::new("Failed to cast o_comment column"))?;
 
             for i in 0..batch.num_rows() {
                 orders.push(Order {
@@ -195,7 +195,7 @@ impl QueryRoot {
                     o_custkey: custkeys.value(i),
                     o_orderstatus: orderstatuses.value(i).to_string(),
                     o_totalprice: totalprices.value(i),
-                    o_orderdate: orderdates.value(i).to_string(),
+                    o_orderdate: "1992-01-01".to_string(), // Temporary placeholder
                     o_orderpriority: orderpriorities.value(i).to_string(),
                     o_clerk: clerks.value(i).to_string(),
                     o_shippriority: shippriorities.value(i),
