@@ -201,7 +201,7 @@ CACHE_ENABLED=true
 [data]
 path = "/path/to/data"
 auto_discovery = true
-supported_formats = ["csv", "parquet", "json"]
+supported_formats = ["csv", "parquet"]
 
 [ai]
 base_url = "http://localhost:11434"
@@ -213,72 +213,6 @@ port = 8080
 host = "0.0.0.0"
 workers = 4
 ```
-
-## 🐳 Docker Deployment
-
-### Quick Start with Docker
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
-
-# Or build manually
-docker build -t graphql-datafusion .
-docker run -p 8080:8080 -v /path/to/data:/data graphql-datafusion
-```
-
-### Docker Compose
-```yaml
-version: '3.8'
-services:
-  graphql-datafusion:
-    build: .
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/data
-    environment:
-      - DATA_PATH=/data
-      - OLLAMA_BASE_URL=http://ollama:11434
-    depends_on:
-      - ollama
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-```
-
-## 📈 Performance
-
-### Benchmarks
-- **Query Response**: 10-100ms for basic queries
-- **Analytics Queries**: 500ms-2s for complex aggregations
-- **AI Queries**: 1-5s for natural language processing
-- **Concurrent Users**: Up to 100 concurrent users
-- **Data Volume**: Supports datasets up to 10GB per file
-
-### Optimization
-- **Memory Management**: Automatic memory limits and cleanup
-- **Query Optimization**: DataFusion's built-in optimizations
-- **Caching**: Intelligent caching of query results
-- **Batch Processing**: Efficient handling of large datasets
-
-## 🔒 Security
-
-### Built-in Security
-- **Input Validation**: Comprehensive parameter validation
-- **SQL Injection Prevention**: Safe query construction
-- **Rate Limiting**: Configurable request limits
-- **CORS Support**: Cross-origin resource sharing
-- **Error Handling**: Secure error messages
-
-### Production Security
-- **HTTPS Support**: SSL/TLS encryption
-- **Authentication**: JWT-based authentication (optional)
-- **Authorization**: Role-based access control
-- **Audit Logging**: Comprehensive activity logging
 
 ## 📚 Documentation
 
@@ -293,45 +227,6 @@ services:
 - [AI Integration](../examples/src/ai_integration.rs) - AI-powered analytics
 - [Advanced Analytics](../examples/src/advanced_analytics.rs) - Complex analytics
 
-## 🔮 Roadmap
-
-### Phase 2: Automatic Data Discovery (Q2 2024)
-- [ ] **Universal Data Connector**
-  - Directory scanning and file discovery
-  - Database connection management
-  - API endpoint integration
-  - Real-time data source monitoring
-
-- [ ] **Intelligent Schema Inference**
-  - Automatic data type detection
-  - Relationship discovery between tables
-  - Schema evolution tracking
-  - Data quality assessment
-
-- [ ] **Metadata Store**
-  - Centralized metadata management
-  - Data lineage tracking
-  - Schema versioning
-  - Usage analytics
-
-### Phase 3: Advanced Analytics & Intelligence (Q3 2024)
-- [ ] **Automated Insights**
-  - Pattern recognition algorithms
-  - Anomaly detection
-  - Trend analysis
-  - Predictive modeling
-
-- [ ] **Collaborative Analytics**
-  - Multi-user dashboards
-  - Shared insights and reports
-  - Comment and annotation system
-  - Export and sharing capabilities
-
-- [ ] **Advanced AI Features**
-  - Custom model training
-  - Domain-specific insights
-  - Natural language generation
-  - Automated report creation
 
 ## 🤝 Contributing
 
@@ -354,12 +249,6 @@ cargo test
 cargo watch -x run
 ```
 
-### Code Quality
-- **Rust**: Follow Rust coding standards
-- **Testing**: Comprehensive unit and integration tests
-- **Documentation**: Clear code documentation
-- **Security**: Regular security audits
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -374,9 +263,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - **Documentation**: [docs/](docs/) directory
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
-- **Email**: support@your-domain.com
+- **Issues**: [GitHub Issues](https://github.com/yarenty/graphql-datafusion/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yarenty/graphql-datafusion/discussions)
+
 
 ---
 

@@ -183,7 +183,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 CMD ["./graphql-datafusion"]
 ```
 
-## ☁️ Cloud Deployment
+## ☁️ Cloud Deployment (untested!)
 
 ### AWS Deployment
 
@@ -249,7 +249,7 @@ CMD ["./graphql-datafusion"]
 }
 ```
 
-#### EKS Deployment
+#### EKS Deployment (untested!)
 
 ```yaml
 # k8s-deployment.yaml
@@ -320,7 +320,7 @@ spec:
   type: LoadBalancer
 ```
 
-### Google Cloud Platform
+### Google Cloud Platform (untested!)
 
 #### Cloud Run
 
@@ -404,7 +404,7 @@ properties:
       protocol: TCP
 ```
 
-## 🔒 Production Security
+## 🔒 Production Security (for future!)
 
 ### SSL/TLS Configuration
 
