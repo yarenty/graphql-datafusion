@@ -1,65 +1,55 @@
+//! Agent orchestrator for managing multiple AI agents
+
 use crate::agents::client::AgentClient;
+use crate::agents::types::{AgentStatus, Insight};
 use crate::models::data::Record;
-use async_graphql::{Error};
-use async_trait::async_trait;
-use futures::Stream;
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use tokio::sync::broadcast;
+use async_graphql::Error;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{error, info, warn};
 
-#[derive(Debug, Clone)]
-pub struct AgentStatus {
-    pub agent_type: String,
-    pub status: String,
-    pub last_update: String,
-    pub metrics: serde_json::Value,
-}
-
+/// Agent orchestrator for managing multiple AI agents
 #[derive(Debug)]
 pub struct AgentOrchestrator {
     clients: HashMap<String, Arc<AgentClient>>,
     default_agent: String,
     retry_attempts: u32,
     retry_delay: Duration,
-
-    // Subscription channels
-    insight_channels: Arc<Mutex<HashMap<String, broadcast::Sender<Insight>>>>,
-    status_channels: Arc<Mutex<HashMap<String, broadcast::Sender<AgentStatus>>>>,
-    subscribers: Arc<Mutex<HashSet<String>>>,
+    agent_stats: HashMap<String, u64>,
 }
 
 impl AgentOrchestrator {
+    /// Create a new agent orchestrator
     pub fn new(
         clients: HashMap<String, Arc<AgentClient>>,
         default_agent: String,
         retry_attempts: u32,
         retry_delay: Duration,
     ) -> Self {
+        let mut agent_stats = HashMap::new();
+        for agent_name in clients.keys() {
+            agent_stats.insert(agent_name.clone(), 0);
+        }
+
         Self {
             clients,
             default_agent,
             retry_attempts,
             retry_delay,
-            insight_channels: Arc::new(Mutex::new(HashMap::new())),
-            status_channels: Arc::new(Mutex::new(HashMap::new())),
-            subscribers: Arc::new(Mutex::new(HashSet::new())),
+            agent_stats,
         }
     }
 
+    /// Process a natural language query
     pub async fn process_query(
-        &self,
+        &mut self,
         input: &str,
         agent_type: Option<String>,
     ) -> Result<(Vec<Record>, String), Error> {
-        let agent_name = agent_type
-            .clone()
-            .unwrap_or_else(|| self.default_agent.clone());
-
-        let client = self
-            .clients
-            .get(&agent_name)
+        let agent_name = agent_type.unwrap_or_else(|| self.default_agent.clone());
+        
+        let client = self.clients.get(&agent_name)
             .ok_or_else(|| Error::new(format!("Agent {} not found", agent_name)))?;
 
         info!("Processing query with agent: {}", agent_name);
@@ -67,18 +57,20 @@ impl AgentOrchestrator {
         // Try with retries
         for attempt in 0..self.retry_attempts {
             match self.attempt_process_query(client, input).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    // Update stats
+                    if let Some(stats) = self.agent_stats.get_mut(&agent_name) {
+                        *stats += 1;
+                    }
+                    return Ok(result);
+                }
                 Err(e) => {
                     if attempt == self.retry_attempts - 1 {
                         error!("All attempts failed for agent {}: {:?}", agent_name, e);
                         return Err(e);
                     }
-                    warn!(
-                        "Attempt {} failed for agent {}: {:?}. Retrying...",
-                        attempt + 1,
-                        agent_name,
-                        e
-                    );
+                    warn!("Attempt {} failed for agent {}: {:?}. Retrying...", 
+                          attempt + 1, agent_name, e);
                     tokio::time::sleep(self.retry_delay).await;
                 }
             }
@@ -87,6 +79,7 @@ impl AgentOrchestrator {
         Err(Error::new("All retries failed"))
     }
 
+    /// Attempt to process a query with a specific agent
     async fn attempt_process_query(
         &self,
         client: &Arc<AgentClient>,
@@ -96,113 +89,64 @@ impl AgentOrchestrator {
         let sql = client.translate_to_sql(input).await?;
         info!("Generated SQL: {}", sql);
 
-        // Step 2: Execute SQL and get records
-        let records = vec![]; // Placeholder - will be replaced with actual DataFusion execution
+        // Step 2: For now, return mock data
+        // In production, this would execute SQL via DataFusion
+        let records = vec![
+            Record { id: 1, name: "Sample 1".to_string(), value: 100.0 },
+            Record { id: 2, name: "Sample 2".to_string(), value: 200.0 },
+            Record { id: 3, name: "Sample 3".to_string(), value: 150.0 },
+        ];
+        
         info!("Retrieved {} records", records.len());
 
         // Step 3: Generate insights
-        let insights = client.generate_insights(records.clone()).await?.to_string();
+        let insights = client.generate_insights(records.clone()).await?;
         info!("Generated insights: {}", insights);
-
-        // Broadcast insights to subscribers
-        self.broadcast_insight(&input, &insights).await;
 
         Ok((records, insights))
     }
 
-    async fn broadcast_insight(&self, query: &str, insights: &str) {
-        let mut channels = self.insight_channels.lock().unwrap();
-        if let Some(sender) = channels.get(query) {
-            let insight = Insight {
-                title: query.to_string(),
-                description: insights.to_string(),
-                value: None,
-                visualization: None,
-                tags: vec!["realtime".to_string()],
-            };
-            let _ = sender.send(insight);
-        }
-    }
-
-    pub fn subscribe_insights(&self, query: String) -> impl Stream<Item = Result<Insight, Error>> {
-        let (tx, rx) = broadcast::channel(100);
-        let mut channels = self.insight_channels.lock().unwrap();
-        channels.insert(query.clone(), tx);
-
-        //        let mut subscribers = self.subscribers.lock().unwrap();
-        //         subscribers.insert(query.clone());
-        //
-        //         Box::pin(rx)
-
-        struct BroadcastStream<T>(broadcast::Receiver<T>);
-
-        impl<T> Stream for BroadcastStream<T> {
-            type Item = Result<T, Error>;
-
-            fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-                let this = self.get_mut();
-                match Pin::new(&mut this.0).poll_recv(cx) {
-                    Poll::Ready(Some(Ok(value))) => Poll::Ready(Some(Ok(value))),
-                    Poll::Ready(Some(Err(e))) => {
-                        Poll::Ready(Some(Err(Error::Other(e.to_string()))))
-                    }
-                    Poll::Ready(None) => Poll::Ready(None),
-                    Poll::Pending => Poll::Pending,
-                }
-            }
-        }
-
-        Box::pin(BroadcastStream(rx))
-    }
-
-    pub fn subscribe_agent_status(
-        &self,
-        agent_type: String,
-    ) -> impl Stream<Item = Result<AgentStatus, Error>> {
-        let (tx, rx) = broadcast::channel(100);
-        let mut channels = self.status_channels.lock().unwrap();
-        channels.insert(agent_type.clone(), tx);
-
-        //        let mut subscribers = self.subscribers.lock().unwrap();
-        //         subscribers.insert(agent_type.clone());
-        //
-        //         Box::pin(rx)
-        struct BroadcastStream<T>(broadcast::Receiver<T>);
-
-        impl<T> Stream for BroadcastStream<T> {
-            type Item = Result<T, Error>;
-
-            fn poll_next(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll::Ready<Option<Self::Item>> {
-                let this = self.get_mut();
-                match Pin::new(&mut this.0).poll_recv(cx) {
-                    Poll::Ready(Some(Ok(value))) => Poll::Ready(Some(Ok(value))),
-                    Poll::Ready(Some(Err(e))) => {
-                        Poll::Ready(Some(Err(Error::Other(e.to_string()))))
-                    }
-                    Poll::Ready(None) => Poll::Ready(None),
-                    Poll::Pending => Poll::Pending,
-                }
-            }
-        }
-
-        Box::pin(BroadcastStream(rx))
-    }
-
+    /// Get available agents
     pub async fn get_available_agents(&self) -> Vec<String> {
         self.clients.keys().cloned().collect()
     }
 
-    pub async fn subscribe_to_updates(&self) -> Result<bool, Error> {
-        let mut subscribers = self.subscribers.lock().unwrap();
-        subscribers.insert("updates".to_string());
-        Ok(true)
-    }
-}
+    /// Get agent status
+    pub async fn get_agent_status(&self, agent_type: &str) -> Option<AgentStatus> {
+        let client = self.clients.get(agent_type)?;
+        let requests_processed = self.agent_stats.get(agent_type).copied().unwrap_or(0);
+        
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
-#[async_trait]
-pub trait AgentOrchestratorTrait {
-    async fn execute(&self, task: &str) -> Result<String, String>;
+        Some(AgentStatus {
+            agent_type: agent_type.to_string(),
+            status: "active".to_string(),
+            last_update: now.to_string(),
+            model: "llama2".to_string(), // This should come from the client
+            requests_processed,
+        })
+    }
+
+    /// Test connection to all agents
+    pub async fn test_connections(&self) -> HashMap<String, bool> {
+        let mut results = HashMap::new();
+        
+        for (agent_name, client) in &self.clients {
+            match client.test_connection().await {
+                Ok(success) => {
+                    results.insert(agent_name.clone(), success);
+                    info!("Agent {} connection test: {}", agent_name, success);
+                }
+                Err(e) => {
+                    error!("Agent {} connection test failed: {:?}", agent_name, e);
+                    results.insert(agent_name.clone(), false);
+                }
+            }
+        }
+        
+        results
+    }
 }

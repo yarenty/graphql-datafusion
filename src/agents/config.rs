@@ -33,7 +33,7 @@ impl AgentConfig {
         let retry_delay_ms = env::var("AGENT_RETRY_DELAY_MS")
             .unwrap_or_else(|_| "1000".to_string())
             .parse()
-            .map_error(|_| ConfigError::InvalidValue("AGENT_RETRY_DELAY_MS".to_string()))?;
+            .map_err(|_| ConfigError::InvalidValue("AGENT_RETRY_DELAY_MS".to_string()))?;
 
         Ok(Self {
             api_url,
