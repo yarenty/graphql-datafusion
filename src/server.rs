@@ -1,21 +1,18 @@
 //! GraphQL DataFusion server
 
-use graphql_datafusion::Config;
-use graphql_datafusion::datafusion::context::DataFusionContext;
-use graphql_datafusion::graphql::schema::{AppSchema, build_schema};
-use graphql_datafusion::agents::client::AgentClient;
-use graphql_datafusion::agents::orchestrator::AgentOrchestrator;
 use actix_web::{App, HttpResponse, HttpServer, middleware::Logger, web};
 use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
+use graphql_datafusion::Config;
+use graphql_datafusion::agents::client::AgentClient;
+use graphql_datafusion::agents::orchestrator::AgentOrchestrator;
+use graphql_datafusion::datafusion::context::DataFusionContext;
+use graphql_datafusion::graphql::schema::{AppSchema, build_schema};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, error};
+use tracing::{error, info};
 
-async fn graphql_handler(
-    schema: web::Data<AppSchema>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
+async fn graphql_handler(schema: web::Data<AppSchema>, req: GraphQLRequest) -> GraphQLResponse {
     schema.execute(req.into_inner()).await.into()
 }
 
@@ -34,11 +31,17 @@ pub async fn start_server(config: Config) -> Result<(), Box<dyn std::error::Erro
     }
     env_logger::init();
 
-    info!("Starting GraphQL DataFusion server on port {}", config.http_port);
+    info!(
+        "Starting GraphQL DataFusion server on port {}",
+        config.http_port
+    );
 
     // Initialize DataFusion context
-    let df_ctx = Arc::new(DataFusionContext::new(&config.data_path).await
-        .map_err(|e| format!("Failed to initialize DataFusion: {}", e))?);
+    let df_ctx = Arc::new(
+        DataFusionContext::new(&config.data_path)
+            .await
+            .map_err(|e| format!("Failed to initialize DataFusion: {}", e))?,
+    );
 
     // Initialize agent system
     let mut clients = HashMap::new();

@@ -1,6 +1,6 @@
 //! Schema inference for DataFusion tables
 
-use datafusion::arrow::datatypes::{Schema as ArrowSchema, DataType};
+use datafusion::arrow::datatypes::{DataType, Schema as ArrowSchema};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -19,7 +19,8 @@ impl SchemaInference {
 
     /// Cache a schema for a table
     pub fn cache_schema(&mut self, table_name: &str, schema: ArrowSchema) {
-        self.schema_cache.insert(table_name.to_string(), Arc::new(schema));
+        self.schema_cache
+            .insert(table_name.to_string(), Arc::new(schema));
     }
 
     /// Get a cached schema
@@ -52,7 +53,7 @@ impl SchemaInference {
     pub fn to_camel_case(s: &str) -> String {
         let mut result = String::new();
         let mut capitalize = true;
-        
+
         for c in s.chars() {
             if c == '_' {
                 capitalize = true;
@@ -63,7 +64,7 @@ impl SchemaInference {
                 result.push(c);
             }
         }
-        
+
         result
     }
 }

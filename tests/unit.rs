@@ -14,11 +14,13 @@ async fn test_datafusion_context_creation() {
 #[tokio::test]
 async fn test_datafusion_query_execution() {
     let ctx = DataFusionContext::new("/opt/data/tpch").await.unwrap();
-    
+
     // Test basic query execution
-    let result = ctx.execute_query("SELECT COUNT(*) as count FROM customer").await;
+    let result = ctx
+        .execute_query("SELECT COUNT(*) as count FROM customer")
+        .await;
     assert!(result.is_ok());
-    
+
     let batches = result.unwrap();
     assert!(!batches.is_empty());
     assert!(batches[0].num_rows() > 0);
@@ -27,11 +29,8 @@ async fn test_datafusion_query_execution() {
 #[tokio::test]
 async fn test_agent_client_creation() {
     // Test that AgentClient can be created
-    let client = AgentClient::new(
-        "http://localhost:11434".to_string(),
-        "llama2".to_string(),
-    );
-    
+    let client = AgentClient::new("http://localhost:11434".to_string(), "llama2".to_string());
+
     // Test that we can call methods on it
     let result = client.test_connection().await;
     // This will fail if Ollama is not running, but that's expected
@@ -51,14 +50,13 @@ async fn test_agent_client_creation() {
 
 #[tokio::test]
 async fn test_agent_client_sql_translation() {
-    let client = AgentClient::new(
-        "http://localhost:11434".to_string(),
-        "llama2".to_string(),
-    );
+    let client = AgentClient::new("http://localhost:11434".to_string(), "llama2".to_string());
 
     // Test SQL translation (this will fail if Ollama is not running, but that's expected)
-    let result = client.translate_to_sql("show me top customers by spending").await;
-    
+    let result = client
+        .translate_to_sql("show me top customers by spending")
+        .await;
+
     // Either it succeeds (if Ollama is running) or fails with a connection error
     match result {
         Ok(sql) => {
@@ -74,10 +72,7 @@ async fn test_agent_client_sql_translation() {
 
 #[tokio::test]
 async fn test_agent_client_insights_generation() {
-    let client = AgentClient::new(
-        "http://localhost:11434".to_string(),
-        "llama2".to_string(),
-    );
+    let client = AgentClient::new("http://localhost:11434".to_string(), "llama2".to_string());
 
     // Create sample customer data
     let customers = vec![
@@ -105,7 +100,7 @@ async fn test_agent_client_insights_generation() {
 
     // Test insights generation (this will fail if Ollama is not running, but that's expected)
     let result = client.generate_insights(customers).await;
-    
+
     match result {
         Ok(insights) => {
             assert!(!insights.is_empty());
@@ -121,10 +116,12 @@ async fn test_agent_client_insights_generation() {
 async fn test_agent_orchestrator_creation() {
     // Test that AgentOrchestrator can be created
     let mut orchestrator = AgentOrchestrator::new();
-    
+
     // Test that it can process queries (will fail if Ollama is not running)
-    let result = orchestrator.process_query("show me top customers by spending", None).await;
-    
+    let result = orchestrator
+        .process_query("show me top customers by spending", None)
+        .await;
+
     match result {
         Ok((customers, insights)) => {
             assert!(!customers.is_empty());
@@ -148,7 +145,7 @@ async fn test_sales_analytics_creation() {
         sales_by_region: vec![],
         monthly_trends: vec![],
     };
-    
+
     assert_eq!(analytics.total_sales, 1000000.0);
     assert_eq!(analytics.total_orders, 1000);
     assert_eq!(analytics.avg_order_value, 1000.0);
@@ -167,7 +164,7 @@ async fn test_customer_creation() {
         c_mktsegment: "BUILDING".to_string(),
         c_comment: "Test customer".to_string(),
     };
-    
+
     assert_eq!(customer.c_custkey, 1);
     assert_eq!(customer.c_name, "Test Customer");
     assert_eq!(customer.c_acctbal, 1000.0);
@@ -183,7 +180,7 @@ async fn test_agent_config_creation() {
         temperature: Some(0.7),
         max_tokens: Some(1000),
     };
-    
+
     assert_eq!(config.agent_type, "test-agent");
     assert_eq!(config.model, "llama2");
     assert_eq!(config.temperature, Some(0.7));
@@ -194,7 +191,7 @@ async fn test_agent_config_creation() {
 async fn test_agent_config_default() {
     // Test default AgentConfig
     let config = AgentConfig::default();
-    
+
     assert_eq!(config.agent_type, "default");
     assert_eq!(config.model, "llama2");
     assert_eq!(config.temperature, None);

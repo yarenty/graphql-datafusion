@@ -32,8 +32,6 @@ pub struct AgentStatus {
     pub requests_processed: u64,
 }
 
-
-
 /// Time series data point
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct Series {

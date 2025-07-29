@@ -1,5 +1,5 @@
 //! GraphQL resolvers
-//! 
+//!
 //! This module contains resolver implementations for GraphQL queries.
 //! Currently, all resolvers are implemented in schema.rs
 

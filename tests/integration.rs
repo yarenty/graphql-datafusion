@@ -5,13 +5,10 @@ use serde_json::json;
 #[tokio::test]
 async fn test_server_health() {
     let client = Client::new();
-    
+
     // Test health endpoint
-    let res = client
-        .get("http://localhost:8080/health")
-        .send()
-        .await;
-    
+    let res = client.get("http://localhost:8080/health").send().await;
+
     match res {
         Ok(response) => {
             if response.status().is_success() {
@@ -29,7 +26,7 @@ async fn test_server_health() {
 #[tokio::test]
 async fn test_graphql_tables_query() {
     let client = Client::new();
-    
+
     let query = r#"
         query {
             tables
@@ -43,7 +40,7 @@ async fn test_graphql_tables_query() {
         }))
         .send()
         .await;
-    
+
     match res {
         Ok(response) => {
             if response.status().is_success() {
@@ -69,7 +66,7 @@ async fn test_graphql_tables_query() {
 #[tokio::test]
 async fn test_graphql_customers_query() {
     let client = Client::new();
-    
+
     let query = r#"
         query {
             customers(limit: 5) {
@@ -88,7 +85,7 @@ async fn test_graphql_customers_query() {
         }))
         .send()
         .await;
-    
+
     match res {
         Ok(response) => {
             if response.status().is_success() {
@@ -96,7 +93,10 @@ async fn test_graphql_customers_query() {
                 if let Some(data) = body.get("data") {
                     if let Some(customers) = data.get("customers") {
                         if let Some(customer_array) = customers.as_array() {
-                            assert!(customer_array.len() <= 5, "Should return at most 5 customers");
+                            assert!(
+                                customer_array.len() <= 5,
+                                "Should return at most 5 customers"
+                            );
                             println!("Retrieved {} customers", customer_array.len());
                         }
                     }
@@ -114,7 +114,7 @@ async fn test_graphql_customers_query() {
 #[tokio::test]
 async fn test_graphql_sales_analytics_query() {
     let client = Client::new();
-    
+
     let query = r#"
         query {
             salesAnalytics {
@@ -140,16 +140,25 @@ async fn test_graphql_sales_analytics_query() {
         }))
         .send()
         .await;
-    
+
     match res {
         Ok(response) => {
             if response.status().is_success() {
                 let body = response.json::<serde_json::Value>().await.unwrap();
                 if let Some(data) = body.get("data") {
                     if let Some(analytics) = data.get("salesAnalytics") {
-                        assert!(analytics.get("totalSales").is_some(), "Should have totalSales");
-                        assert!(analytics.get("totalOrders").is_some(), "Should have totalOrders");
-                        assert!(analytics.get("avgOrderValue").is_some(), "Should have avgOrderValue");
+                        assert!(
+                            analytics.get("totalSales").is_some(),
+                            "Should have totalSales"
+                        );
+                        assert!(
+                            analytics.get("totalOrders").is_some(),
+                            "Should have totalOrders"
+                        );
+                        assert!(
+                            analytics.get("avgOrderValue").is_some(),
+                            "Should have avgOrderValue"
+                        );
                         println!("Sales analytics query successful");
                     }
                 }
@@ -166,7 +175,7 @@ async fn test_graphql_sales_analytics_query() {
 #[tokio::test]
 async fn test_graphql_natural_language_query() {
     let client = Client::new();
-    
+
     let query = r#"
         query {
             naturalLanguageQuery(input: "show me top customers by spending")
@@ -180,7 +189,7 @@ async fn test_graphql_natural_language_query() {
         }))
         .send()
         .await;
-    
+
     match res {
         Ok(response) => {
             if response.status().is_success() {
@@ -189,7 +198,10 @@ async fn test_graphql_natural_language_query() {
                     if let Some(sql) = data.get("naturalLanguageQuery") {
                         if let Some(sql_str) = sql.as_str() {
                             assert!(!sql_str.is_empty(), "SQL should not be empty");
-                            assert!(sql_str.to_lowercase().contains("select"), "Should contain SELECT");
+                            assert!(
+                                sql_str.to_lowercase().contains("select"),
+                                "Should contain SELECT"
+                            );
                             println!("Generated SQL: {}", sql_str);
                         }
                     }
@@ -207,7 +219,7 @@ async fn test_graphql_natural_language_query() {
 #[tokio::test]
 async fn test_graphql_insights_query() {
     let client = Client::new();
-    
+
     let query = r#"
         query {
             insights(input: "analyze customer spending patterns")
@@ -221,7 +233,7 @@ async fn test_graphql_insights_query() {
         }))
         .send()
         .await;
-    
+
     match res {
         Ok(response) => {
             if response.status().is_success() {
@@ -247,7 +259,7 @@ async fn test_graphql_insights_query() {
 #[tokio::test]
 async fn test_graphql_agent_status_query() {
     let client = Client::new();
-    
+
     let query = r#"
         query {
             agentStatus
@@ -261,7 +273,7 @@ async fn test_graphql_agent_status_query() {
         }))
         .send()
         .await;
-    
+
     match res {
         Ok(response) => {
             if response.status().is_success() {
@@ -288,17 +300,22 @@ async fn test_graphql_agent_status_query() {
 async fn test_datafusion_integration() {
     // Test DataFusion context creation
     let ctx = DataFusionContext::new("/opt/data/tpch").await;
-    assert!(ctx.is_ok(), "DataFusion context should be created successfully");
-    
+    assert!(
+        ctx.is_ok(),
+        "DataFusion context should be created successfully"
+    );
+
     let ctx = ctx.unwrap();
-    
+
     // Test basic query execution
-    let result = ctx.execute_query("SELECT COUNT(*) as count FROM customer").await;
+    let result = ctx
+        .execute_query("SELECT COUNT(*) as count FROM customer")
+        .await;
     assert!(result.is_ok(), "Query execution should succeed");
-    
+
     let batches = result.unwrap();
     assert!(!batches.is_empty(), "Should return at least one batch");
     assert!(batches[0].num_rows() > 0, "Should have at least one row");
-    
+
     println!("DataFusion integration test passed");
 }

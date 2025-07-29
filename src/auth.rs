@@ -1,13 +1,11 @@
 //! Minimal authentication module
-//! 
+//!
 //! This module provides basic authentication functionality.
 //! For now, it's a minimal implementation that can be extended later.
 
-use actix_web::dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform};
 use actix_web::Error;
-use futures_util::future::{ready, LocalBoxFuture, Ready};
-use std::future::Future;
-use std::pin::Pin;
+use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready};
+use futures_util::future::{LocalBoxFuture, Ready, ready};
 
 /// Authentication middleware
 #[derive(Debug, Clone)]
@@ -85,4 +83,4 @@ impl Claims {
             exp: (chrono::Utc::now() + chrono::Duration::hours(24)).timestamp() as usize,
         }
     }
-} 
+}

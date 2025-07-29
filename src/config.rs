@@ -10,28 +10,28 @@ use std::env;
 pub struct Config {
     /// HTTP server port
     pub http_port: u16,
-    
+
     /// Data file path (CSV or Parquet)
     pub data_path: String,
-    
+
     /// Table name for DataFusion
     pub table_name: String,
-    
+
     /// Ollama API URL
     pub ollama_url: String,
-    
+
     /// Ollama model name
     pub ollama_model: String,
-    
+
     /// Enable metrics collection
     pub enable_metrics: bool,
-    
+
     /// Log level
     pub log_level: String,
-    
+
     /// Maximum query timeout in seconds
     pub query_timeout: u64,
-    
+
     /// Enable query caching
     pub enable_caching: bool,
 }
@@ -56,39 +56,39 @@ impl Config {
     /// Create configuration from environment variables
     pub fn from_env() -> Self {
         let mut config = Self::default();
-        
+
         if let Ok(port) = env::var("HTTP_PORT") {
             if let Ok(port_num) = port.parse() {
                 config.http_port = port_num;
             }
         }
-        
+
         if let Ok(path) = env::var("DATA_PATH") {
             config.data_path = path;
         }
-        
+
         if let Ok(table) = env::var("TABLE_NAME") {
             config.table_name = table;
         }
-        
+
         if let Ok(url) = env::var("OLLAMA_URL") {
             config.ollama_url = url;
         }
-        
+
         if let Ok(model) = env::var("OLLAMA_MODEL") {
             config.ollama_model = model;
         }
-        
+
         if let Ok(level) = env::var("LOG_LEVEL") {
             config.log_level = level;
         }
-        
+
         if let Ok(timeout) = env::var("QUERY_TIMEOUT") {
             if let Ok(timeout_num) = timeout.parse() {
                 config.query_timeout = timeout_num;
             }
         }
-        
+
         config
     }
 

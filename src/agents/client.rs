@@ -1,6 +1,6 @@
 //! Agent client for Ollama integration
 
-use crate::agents::types::{OllamaRequest, OllamaResponse, OllamaOptions};
+use crate::agents::types::{OllamaOptions, OllamaRequest, OllamaResponse};
 use crate::models::data::Customer;
 use async_graphql::Error;
 use reqwest::Client;
@@ -33,7 +33,7 @@ impl AgentClient {
             Return only the SQL query, no explanations.",
             input
         );
-        
+
         self.call_ollama(&prompt).await
     }
 
@@ -48,7 +48,7 @@ impl AgentClient {
             "Analyze this customer data and provide business insights: {}",
             summary
         );
-        
+
         self.call_ollama(&prompt).await
     }
 
@@ -70,7 +70,8 @@ impl AgentClient {
             options: Some(self.options.clone()),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&format!("{}/api/generate", self.ollama_url))
             .json(&request)
             .send()
@@ -104,9 +105,10 @@ impl AgentClient {
         let total_customers = customers.len();
         let total_balance: f64 = customers.iter().map(|c| c.c_acctbal).sum();
         let avg_balance = total_balance / total_customers as f64;
-        
-        let market_segments: std::collections::HashMap<String, usize> = 
-            customers.iter()
+
+        let market_segments: std::collections::HashMap<String, usize> =
+            customers
+                .iter()
                 .fold(std::collections::HashMap::new(), |mut acc, c| {
                     *acc.entry(c.c_mktsegment.clone()).or_insert(0) += 1;
                     acc

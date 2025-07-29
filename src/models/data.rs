@@ -1,6 +1,6 @@
 //! Data structures for GraphQL DataFusion
 
-use async_graphql::{InputObject, SimpleObject, Enum};
+use async_graphql::{Enum, InputObject, SimpleObject};
 use serde::{Deserialize, Serialize};
 
 // TPCH Data Models
