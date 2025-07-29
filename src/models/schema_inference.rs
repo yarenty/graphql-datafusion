@@ -1,67 +1,34 @@
-use async_graphql::{Object, SchemaBuilder, Result, Enum};
+//! Schema inference for DataFusion tables
+
 use datafusion::arrow::datatypes::{Schema as ArrowSchema, DataType};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Schema inference for DataFusion tables
 pub struct SchemaInference {
-    datafusion_ctx: Arc<SessionContext>,
     schema_cache: HashMap<String, Arc<ArrowSchema>>,
 }
 
 impl SchemaInference {
-    pub fn new(datafusion_ctx: Arc<SessionContext>) -> Self {
+    /// Create a new schema inference instance
+    pub fn new() -> Self {
         Self {
-            datafusion_ctx,
             schema_cache: HashMap::new(),
         }
     }
 
-    pub async fn infer_schema(&mut self, table_name: &str) -> Result<Arc<ArrowSchema>> {
-        if let Some(schema) = self.schema_cache.get(table_name) {
-            return Ok(schema.clone());
-        }
-
-        // Get table schema from DataFusion
-        let schema = self.datafusion_ctx
-            .table(table_name)
-            .await?
-            .schema()
-            .clone();
-
-        self.schema_cache.insert(table_name.to_string(), Arc::new(schema.clone()));
-        Ok(Arc::new(schema))
+    /// Cache a schema for a table
+    pub fn cache_schema(&mut self, table_name: &str, schema: ArrowSchema) {
+        self.schema_cache.insert(table_name.to_string(), Arc::new(schema));
     }
 
-    pub fn generate_graphql_type(&self, table_name: &str, schema: &ArrowSchema) -> String {
-        format!(
-            """
-#[derive(SimpleObject)]
-pub struct {} {{
-    {}{}
-}}
-""",
-            table_name.to_camel_case(),
-            self.generate_fields(schema),
-            if schema.fields().len() > 0 { "\n" } else { "" }
-        )
+    /// Get a cached schema
+    pub fn get_cached_schema(&self, table_name: &str) -> Option<Arc<ArrowSchema>> {
+        self.schema_cache.get(table_name).cloned()
     }
 
-    fn generate_fields(&self, schema: &ArrowSchema) -> String {
-        schema
-            .fields()
-            .iter()
-            .map(|field| self.generate_field(field))
-            .collect::<Vec<String>>()
-            .join("\n")
-    }
-
-    fn generate_field(&self, field: &datafusion::arrow::datatypes::Field) -> String {
-        let field_name = field.name();
-        let rust_type = self.arrow_type_to_rust_type(field.data_type());
-        format!("    pub {}: {},", field_name, rust_type)
-    }
-
-    fn arrow_type_to_rust_type(&self, data_type: &DataType) -> String {
+    /// Convert Arrow data type to Rust type string
+    pub fn arrow_type_to_rust_type(data_type: &DataType) -> String {
         match data_type {
             DataType::Int8 | DataType::Int16 | DataType::Int32 => "i32".to_string(),
             DataType::Int64 => "i64".to_string(),
@@ -77,54 +44,26 @@ pub struct {} {{
             DataType::Binary => "Vec<u8>".to_string(),
             DataType::LargeBinary => "Vec<u8>".to_string(),
             DataType::List(_) => "Vec<serde_json::Value>".to_string(),
-            DataType::Struct(fields) => {
-                let struct_name = format!("{}Struct", fields[0].name());
-                format!("Box<{}>", struct_name)
-            }
             _ => "serde_json::Value".to_string(), // Fallback for unsupported types
         }
     }
 
-    pub fn generate_graphql_schema(&self, table_name: &str, schema: &ArrowSchema) -> String {
-        format!(
-            """
-#[derive(SimpleObject)]
-pub struct {} {{
-    {}{}
-}}
-
-#[derive(SimpleObject)]
-pub struct {}Query {{
-    {}(ctx: &Context<'_>) -> Result<Vec<{}>> {{
-        let df_ctx = ctx.data_unchecked::<Arc<SessionContext>>();
-        let df = df_ctx.sql(format!("SELECT * FROM {}"));
-        let batches = df.collect().await?;
-        let records = batches.into_iter().flat_map(|batch| {{
-            let record = {}::from_arrow_batch(batch);
-            Some(record)
-        }}).collect();
-        Ok(records)
-    }}
-}}
-""",
-            table_name.to_camel_case(),
-            self.generate_fields(schema),
-            if schema.fields().len() > 0 { "\n" } else { "" },
-            table_name.to_camel_case(),
-            table_name.to_camel_case(),
-            table_name.to_camel_case(),
-            table_name.to_camel_case(),
-            table_name.to_camel_case()
-        )
+    /// Convert snake_case to CamelCase
+    pub fn to_camel_case(s: &str) -> String {
+        let mut result = String::new();
+        let mut capitalize = true;
+        
+        for c in s.chars() {
+            if c == '_' {
+                capitalize = true;
+            } else if capitalize {
+                result.push(c.to_ascii_uppercase());
+                capitalize = false;
+            } else {
+                result.push(c);
+            }
+        }
+        
+        result
     }
-}
-
-// Extension trait for converting Arrow batches to Rust structs
-pub trait FromArrowBatch {
-    fn from_arrow_batch(batch: RecordBatch) -> Self;
-}
-
-// Helper trait for converting Arrow types to Rust types
-pub trait ArrowTypeToRust {
-    fn to_rust_type(&self) -> String;
 }
