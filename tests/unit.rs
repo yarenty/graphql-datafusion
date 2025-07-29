@@ -1,14 +1,14 @@
-use crate::datafusion::context::DataFusionContext;
 use crate::agents::client::AgentClient;
 use crate::agents::orchestrator::AgentOrchestrator;
+use crate::agents::types::{AgentConfig, Filter};
+use crate::datafusion::context::DataFusionContext;
+use crate::graphql::helpers::{apply_filters, parse_insights};
 use crate::graphql::schema::build_schema;
+use crate::models::data::Record;
 use async_graphql::EmptyMutation;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::time::Duration;
-use std::collections::HashMap;
-use crate::graphql::helpers::{parse_insights, apply_filters};
-use crate::models::data::Record;
-use crate::agents::types::{AgentConfig, Filter};
 
 #[tokio::test]
 async fn test_query_execution() {
@@ -24,10 +24,13 @@ async fn test_agent_client() {
         "https://api.x.ai/grok".to_string(),
         "test-api-key".to_string(),
     );
-    
-    let sql = client.translate_to_sql("Show records with value > 100").await.unwrap();
+
+    let sql = client
+        .translate_to_sql("Show records with value > 100")
+        .await
+        .unwrap();
     assert_eq!(sql, "SELECT * FROM records WHERE value > 100");
-    
+
     let insights = client.generate_insights(vec![]).await.unwrap();
     assert!(!insights.is_empty());
 }
@@ -38,19 +41,19 @@ async fn test_agent_orchestrator() {
         "https://api.x.ai/grok".to_string(),
         "test-api-key".to_string(),
     );
-    
+
     let orchestrator = AgentOrchestrator::new(
         HashMap::from([("default".to_string(), Arc::new(client.clone()))]),
         "default".to_string(),
         3,
         Duration::from_secs(1),
     );
-    
+
     let (records, insights) = orchestrator
         .process_query("Show records with value > 100", None)
         .await
         .unwrap();
-    
+
     assert!(!records.is_empty());
     assert!(!insights.is_empty());
 }
@@ -68,7 +71,7 @@ async fn test_schema_building() {
         3,
         Duration::from_secs(1),
     ));
-    
+
     let schema = build_schema(ctx, orchestrator);
     assert!(schema.is_valid());
 }
@@ -82,13 +85,9 @@ async fn test_insight_parsing() {
         visualization: None,
         filters: None,
     };
-    
-    let insights = parse_insights(
-        insights_text.to_string(),
-        &records,
-        &config,
-    ).unwrap();
-    
+
+    let insights = parse_insights(insights_text.to_string(), &records, &config).unwrap();
+
     assert_eq!(insights.len(), 3);
     assert_eq!(insights[0].title, "Total sales");
     assert_eq!(insights[0].value.unwrap(), "$10000");
@@ -112,15 +111,13 @@ async fn test_data_filtering() {
             value: 200.0,
         },
     ];
-    
-    let filters = vec![
-        Filter {
-            field: "value".to_string(),
-            operator: ">".to_string(),
-            value: "150".to_string(),
-        },
-    ];
-    
+
+    let filters = vec![Filter {
+        field: "value".to_string(),
+        operator: ">".to_string(),
+        value: "150".to_string(),
+    }];
+
     let filtered = apply_filters(records, &filters);
     assert_eq!(filtered.len(), 1);
     assert_eq!(filtered[0].name, "Product B");

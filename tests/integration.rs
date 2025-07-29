@@ -1,8 +1,8 @@
 use crate::datafusion::context::DataFusionContext;
 use datafusion::prelude::*;
 use reqwest::Client;
-use tokio::time::Duration;
 use serde_json::json;
+use tokio::time::Duration;
 
 #[tokio::test]
 async fn test_insights_query() {
@@ -23,11 +23,11 @@ async fn test_insights_query() {
             }
         }
     "#;
-    
+
     let variables = json!({
         "input": "Show records with value > 100"
     });
-    
+
     let res = client
         .post("http://localhost:8000/graphql")
         .json(&json!({
@@ -37,7 +37,7 @@ async fn test_insights_query() {
         .send()
         .await
         .unwrap();
-    
+
     assert!(res.status().is_success());
     let body = res.json::<serde_json::Value>().await.unwrap();
     assert!(body["data"]["insights"].as_array().unwrap().len() > 0);
@@ -55,7 +55,7 @@ async fn test_subscription() {
             }
         }
     "#;
-    
+
     let res = client
         .post("http://localhost:8000/graphql")
         .json(&json!({
@@ -64,19 +64,20 @@ async fn test_subscription() {
         .send()
         .await
         .unwrap();
-    
+
     assert!(res.status().is_success());
 }
 
 #[tokio::test]
 async fn test_websocket_insights() {
-    let (mut ws_stream, _) = tokio_tungstenite::connect_async(
-        "ws://localhost:8001/ws/insights/sales-trends"
-    ).await.unwrap();
-    
+    let (mut ws_stream, _) =
+        tokio_tungstenite::connect_async("ws://localhost:8001/ws/insights/sales-trends")
+            .await
+            .unwrap();
+
     // Wait for initial connection
     tokio::time::sleep(Duration::from_secs(1)).await;
-    
+
     // Send a query to trigger updates
     let client = Client::new();
     let res = client
@@ -87,9 +88,9 @@ async fn test_websocket_insights() {
         .send()
         .await
         .unwrap();
-    
+
     assert!(res.status().is_success());
-    
+
     // Wait for WebSocket message
     let msg = ws_stream.next().await.unwrap().unwrap();
     let insight: serde_json::Value = serde_json::from_str(&msg.to_text().unwrap()).unwrap();
@@ -98,13 +99,14 @@ async fn test_websocket_insights() {
 
 #[tokio::test]
 async fn test_websocket_status() {
-    let (mut ws_stream, _) = tokio_tungstenite::connect_async(
-        "ws://localhost:8001/ws/status/sales-agent"
-    ).await.unwrap();
-    
+    let (mut ws_stream, _) =
+        tokio_tungstenite::connect_async("ws://localhost:8001/ws/status/sales-agent")
+            .await
+            .unwrap();
+
     // Wait for initial connection
     tokio::time::sleep(Duration::from_secs(1)).await;
-    
+
     // Send a query to trigger status updates
     let client = Client::new();
     let res = client
@@ -115,9 +117,9 @@ async fn test_websocket_status() {
         .send()
         .await
         .unwrap();
-    
+
     assert!(res.status().is_success());
-    
+
     // Wait for WebSocket message
     let msg = ws_stream.next().await.unwrap().unwrap();
     let status: serde_json::Value = serde_json::from_str(&msg.to_text().unwrap()).unwrap();
@@ -135,11 +137,11 @@ async fn test_query_translator() {
             }
         }
     "#;
-    
+
     let variables = json!({
         "input": "Show records with value > 100"
     });
-    
+
     let res = client
         .post("http://localhost:8000/graphql")
         .json(&json!({
@@ -149,10 +151,13 @@ async fn test_query_translator() {
         .send()
         .await
         .unwrap();
-    
+
     assert!(res.status().is_success());
     let body = res.json::<serde_json::Value>().await.unwrap();
-    assert_eq!(body["data"]["translateQuery"]["sql"].as_str().unwrap(), "SELECT * FROM records WHERE value > 100");
+    assert_eq!(
+        body["data"]["translateQuery"]["sql"].as_str().unwrap(),
+        "SELECT * FROM records WHERE value > 100"
+    );
 }
 
 #[tokio::test]
@@ -174,7 +179,7 @@ async fn test_data_aggregation() {
             }
         }
     "#;
-    
+
     let variables = json!({
         "input": "Analyze monthly sales",
         "config": {
@@ -189,7 +194,7 @@ async fn test_data_aggregation() {
             }
         }
     });
-    
+
     let res = client
         .post("http://localhost:8000/graphql")
         .json(&json!({
@@ -199,11 +204,16 @@ async fn test_data_aggregation() {
         .send()
         .await
         .unwrap();
-    
+
     assert!(res.status().is_success());
     let body = res.json::<serde_json::Value>().await.unwrap();
     assert_eq!(body["data"]["insights"].as_array().unwrap().len(), 1);
-    assert_eq!(body["data"]["insights"][0]["visualization"]["kind"].as_str().unwrap(), "line");
+    assert_eq!(
+        body["data"]["insights"][0]["visualization"]["kind"]
+            .as_str()
+            .unwrap(),
+        "line"
+    );
 }
 
 #[tokio::test]
