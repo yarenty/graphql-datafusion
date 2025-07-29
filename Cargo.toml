@@ -13,6 +13,7 @@ path = "src/server.rs"
 
 [dependencies]
 async-graphql = "7"        # GraphQL server # GraphQL derive macros
+async-graphql-actix-web = "7"  # GraphQL Actix integration
 async-trait = "0.1"           # Async trait support
 sqlparser = "0.7"             # SQL parsing
 regex = "1.10"               # Regular expressions
@@ -29,6 +30,7 @@ reqwest = { version = "0.12", features = ["json"] } # HTTP client for agent API 
 jsonwebtoken = "9.3"        # Authentication
 prometheus = "0.13"         # Metrics
 futures = "0.3"             # Async utilities
+futures-util = "0.3"        # Futures utilities
 lazy_static = "1.5"# Static variables
 serde_json = "1.0"
 thiserror = "2.0"
