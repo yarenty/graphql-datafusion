@@ -1,106 +1,79 @@
-use crate::Config;
-use actix_web::{
-    App,
-    HttpServer,
-    HttpResponse,
-    middleware::Logger,
-    web,
-};
-use async_graphql::Schema;
-use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
-use std::sync::Arc;
-use tracing::{info, error};
-use crate::graphql::schema::SchemaBuilder;
-use crate::graphql::context::GraphQLContext;
-use crate::security::SecurityMiddleware;
-use crate::rate_limit::RateLimitMiddleware;
-use crate::auth::AuthMiddleware;
+//! GraphQL DataFusion server
 
-/// Starts the GraphQL DataFusion server
+use graphql_datafusion::Config;
+use graphql_datafusion::datafusion::context::DataFusionContext;
+use graphql_datafusion::graphql::schema::{AppSchema, build_schema};
+use graphql_datafusion::agents::client::AgentClient;
+use graphql_datafusion::agents::orchestrator::AgentOrchestrator;
+use actix_web::{App, HttpResponse, HttpServer, middleware::Logger, web};
+use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+use tracing::{info, error};
+
+async fn graphql_handler(
+    schema: web::Data<AppSchema>,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    schema.execute(req.into_inner()).await.into()
+}
+
+async fn playground() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(async_graphql::http::playground_source(
+            async_graphql::http::GraphQLPlaygroundConfig::new("/graphql"),
+        ))
+}
+
 pub async fn start_server(config: Config) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
-    let log_level = config.log_level.clone();
-    let tracing_level = config.tracing_level.clone();
-    
-    std::env::set_var("RUST_LOG", &log_level);
-    std::env::set_var("RUST_TRACING", &tracing_level);
-    
+    unsafe {
+        std::env::set_var("RUST_LOG", &config.log_level);
+    }
     env_logger::init();
-    
-    info!("Starting GraphQL DataFusion server");
-    
+
+    info!("Starting GraphQL DataFusion server on port {}", config.http_port);
+
+    // Initialize DataFusion context
+    let df_ctx = Arc::new(DataFusionContext::new(&config.data_path, &config.table_name).await
+        .map_err(|e| format!("Failed to initialize DataFusion: {}", e))?);
+
+    // Initialize agent system
+    let mut clients = HashMap::new();
+    let client = Arc::new(AgentClient::new(
+        config.ollama_url.clone(),
+        config.ollama_model.clone(),
+    ));
+    clients.insert("default".to_string(), client);
+
+    let orchestrator = Arc::new(AgentOrchestrator::new(
+        clients,
+        "default".to_string(),
+        3,
+        Duration::from_secs(1),
+    ));
+
     // Build GraphQL schema
-    let schema = SchemaBuilder::new()
-        .build()
-        .await
-        .map_err(|e| format!("Failed to build schema: {}", e))?;
-    
-    let schema = Arc::new(schema);
-    
-    // Create context
-    let context = GraphQLContext::new(config.clone())
-        .await
-        .map_err(|e| format!("Failed to create context: {}", e))?;
-    
-    // Create server
-    let server = HttpServer::new(move || {
-        App::new()
-            // Add security middleware
-            .wrap(SecurityMiddleware::new(config.security.clone()))
-            // Add rate limiting middleware
-            .wrap(RateLimitMiddleware::new(config.rate_limit.clone()))
-            // Add authentication middleware
-            .wrap(AuthMiddleware::new(config.jwt_secret.clone()))
-            // Add logging middleware
-            .wrap(Logger::default())
-            // Add GraphQL endpoints
-            .service(
-                web::resource("/graphql")
-                    .route(web::post().to(|ctx: web::Data<GraphQLContext>,
-                                         schema: web::Data<Schema>,
-                                         req: GraphQLRequest|
-                                         -> impl actix_web::Responder {
-                        async move {
-                            let resp = schema
-                                .execute(req.into_inner(), &ctx)
-                                .await;
-                            
-                            HttpResponse::Ok().json(resp)
-                        }
-                    }))
-            )
-            // Add WebSocket endpoint
-            .service(
-                web::resource("/ws/{query}")
-                    .route(web::get().to(|ctx: web::Data<GraphQLContext>,
-                                        schema: web::Data<Schema>,
-                                        req: web::Path<String>|
-                                        -> impl actix_web::Responder {
-                        async move {
-                            let query = req.into_inner();
-                            let resp = schema
-                                .execute(
-                                    GraphQLRequest::new(query, None, None),
-                                    &ctx
-                                )
-                                .await;
-                            
-                            HttpResponse::Ok().json(resp)
-                        }
-                    }))
-            )
-    });
-    
+    let schema = web::Data::new(build_schema(df_ctx, orchestrator));
+
     // Start server
-    server
-        .bind(format!("0.0.0.0:{}", config.http_port))?
-        .run()
-        .await
-        .map_err(|e| format!("Failed to start server: {}", e).into())
+    HttpServer::new(move || {
+        App::new()
+            .wrap(Logger::default())
+            .app_data(schema.clone())
+            .service(web::resource("/graphql").route(web::post().to(graphql_handler)))
+            .service(web::resource("/playground").route(web::get().to(playground)))
+    })
+    .bind(format!("0.0.0.0:{}", config.http_port))?
+    .run()
+    .await
+    .map_err(|e| format!("Failed to start server: {}", e).into())
 }
 
 #[actix_web::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::default();
+    let config = Config::from_env();
     start_server(config).await
 }

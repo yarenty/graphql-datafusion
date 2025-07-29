@@ -1,8 +1,6 @@
-use async_graphql::*;
+//! GraphQL resolvers
+//! 
+//! This module contains resolver implementations for GraphQL queries.
+//! Currently, all resolvers are implemented in schema.rs
 
-pub struct Query;
-
-#[Object]
-impl Query {
-    // Add your resolver implementations here
-}
+// TODO: Move resolvers here when the schema grows larger
